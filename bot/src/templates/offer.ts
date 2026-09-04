@@ -21,6 +21,8 @@ export interface OfferTier {
   perAdult: number;
   extras: string[];
   recommended?: boolean;
+  /** صورة رأس البطاقة — صورة مختلفة لكل فئة حين تتوفر. */
+  image?: string;
 }
 
 export interface OfferDoc {
@@ -219,28 +221,74 @@ export function offerHtml(doc: OfferDoc): string {
   .details strong { font-size: 10pt; color: ${palette.pine}; font-weight: 600; }
 
   /* ---------------- الخيارات ---------------- */
-  .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; }
-  .tier { border: 0.25mm solid ${palette.line}; padding: 6mm 4.5mm; display: flex; flex-direction: column; }
-  .tier.rec { border: 0.6mm solid ${palette.teal}; background: ${palette.tealSoft}; }
-  .tier h4 { margin: 0 0 .8mm; font-size: 13pt; font-weight: 700; color: ${palette.pine}; }
-  .tier .badge { display: block; font-size: 8pt; color: ${palette.teal}; margin-bottom: 2mm; }
-  .tier .hotel { font-size: 9.5pt; color: ${palette.ink2}; margin: 0 0 .6mm; font-weight: 600; }
-  .tier .stars { color: ${palette.gold}; font-size: 9pt; margin-bottom: 3mm; }
-  .tier .price {
-    font-family: "Amiri", serif; font-size: 22pt; color: ${palette.copper};
-    line-height: 1.2; font-variant-numeric: tabular-nums; margin: auto 0 0;
+  .tiers {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 5mm; align-items: start; padding-top: 5mm;
   }
-  .tier .per { font-size: 8.5pt; color: ${palette.muted}; margin: 0 0 3.5mm; font-variant-numeric: tabular-nums; }
-  .tier ul { margin: 0; padding-inline-start: 4mm; font-size: 9pt; color: ${palette.ink2}; }
-  .tier ul li { margin-bottom: 1mm; }
+  .tier {
+    border-radius: 3mm; overflow: hidden; background: #fff;
+    box-shadow: 0 1mm 3.5mm rgba(20,29,26,.13);
+    display: flex; flex-direction: column;
+  }
+  /* البطاقة الموصى بها مرفوعة قليلاً وظلّها أعمق — الفرق يُرى قبل أن يُقرأ */
+  .tier.rec { box-shadow: 0 2mm 7mm rgba(14,110,107,.30); margin-top: -5mm; }
 
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; margin-top: 8mm; }
-  .box { border: 0.25mm solid ${palette.line}; padding: 4mm 5mm; }
-  .box.inc { border-inline-start: 1mm solid ${palette.teal}; }
-  .box.exc { border-inline-start: 1mm solid ${palette.copper}; }
-  .box h4 { margin: 0 0 2.5mm; font-size: 11pt; color: ${palette.pine}; }
-  .box ul { margin: 0; padding-inline-start: 4.5mm; font-size: 9.5pt; }
-  .box li { margin-bottom: 1.2mm; }
+  .tier .top { position: relative; height: 36mm; overflow: hidden; background: ${palette.pine}; }
+  .tier .top img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tier .top .veil {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(16,24,21,.90) 0%, rgba(16,24,21,.28) 72%);
+  }
+  .tier .top .name { position: absolute; inset-inline: 4.5mm; bottom: 3.5mm; color: #fff; }
+  .tier .top h4 { margin: 0; font-size: 15pt; font-weight: 700; line-height: 1.2; }
+  .tier .top .stars { color: #E9B183; font-size: 9.5pt; margin-top: .6mm; }
+  .tier .ribbon {
+    background: ${palette.teal}; color: #fff; font-size: 8.5pt; font-weight: 600;
+    padding: 2mm; text-align: center;
+  }
+
+  .tier .body { padding: 5mm 4.5mm 6mm; display: flex; flex-direction: column; flex: 1; }
+  .tier .price {
+    font-family: "Amiri", serif; font-size: 27pt; color: ${palette.copper};
+    line-height: 1.05; font-variant-numeric: tabular-nums; margin: 0;
+  }
+  .tier .per { font-size: 8.5pt; color: ${palette.muted}; margin: 1mm 0 4mm; font-variant-numeric: tabular-nums; }
+  .tier .hotel {
+    font-size: 9pt; color: ${palette.ink2}; margin: 0 0 3.5mm;
+    padding-bottom: 3mm; border-bottom: 0.2mm solid ${palette.lineSoft};
+  }
+  .tier ul { margin: 0; padding: 0; list-style: none; font-size: 9pt; color: ${palette.ink2}; }
+  .tier ul li {
+    display: grid; grid-template-columns: 4.5mm 1fr; gap: 1.5mm;
+    align-items: start; margin-bottom: 1.7mm; line-height: 1.45;
+  }
+  .tier ul li::before { content: "✓"; color: ${palette.teal}; font-weight: 700; font-size: 9.5pt; }
+
+  /* يشمل / لا يشمل: كتل ملوّنة بلا حدود، وعلامات بدل نقاط */
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; margin-top: 11mm; }
+  .box { border-radius: 3mm; padding: 5mm 6mm; }
+  .box.inc { background: ${palette.tealSoft}; }
+  .box.exc { background: ${palette.copperSoft}; }
+  .box h4 { margin: 0 0 3mm; font-size: 11.5pt; font-weight: 700; }
+  .box.inc h4 { color: ${palette.teal}; }
+  .box.exc h4 { color: ${palette.copper}; }
+  .box ul { margin: 0; padding: 0; list-style: none; font-size: 9.5pt; color: ${palette.ink2}; }
+  .box li {
+    display: grid; grid-template-columns: 5mm 1fr; gap: 1.5mm;
+    align-items: start; margin-bottom: 1.9mm; line-height: 1.5;
+  }
+  .box.inc li::before { content: "✓"; color: ${palette.teal}; font-weight: 700; }
+  .box.exc li::before { content: "✕"; color: ${palette.copper}; font-weight: 700; }
+
+  /* شريط طمأنة يختم صفحة الخيارات — لون لا صورة، تفادياً لتكرار صور البطاقات */
+  .assure {
+    margin-top: auto; margin-bottom: 4mm;
+    background: ${palette.pine}; color: #EFF3F0;
+    border-radius: 3mm; padding: 5mm 6mm;
+    display: flex; align-items: center; justify-content: space-between; gap: 5mm;
+  }
+  .assure span { font-size: 10pt; }
+  .assure b { font-family: "Amiri", serif; font-size: 16pt; color: #E9B183; }
 
   /* ---------------- الشروط والتواصل ---------------- */
   .deposit {
@@ -358,16 +406,24 @@ ${
       ${doc.tiers
         .map(
           (t) => `<div class="tier${t.recommended ? ' rec' : ''}">
-        <h4>${esc(t.label)}</h4>
-        ${t.recommended ? '<span class="badge">الأكثر طلباً</span>' : ''}
-        ${t.hotelName ? `<p class="hotel">${esc(t.hotelName)}</p>` : ''}
-        ${t.hotelClass && STARS[t.hotelClass] ? `<div class="stars">${STARS[t.hotelClass]}</div>` : ''}
-        ${t.extras.length ? `<ul>${t.extras.map((e) => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}
-        <p class="price">${esc(m(t.price))}</p>
-        <p class="per">${esc(m(t.perAdult))} للبالغ الواحد</p>
+        ${t.recommended ? '<div class="ribbon">الأكثر طلباً</div>' : ''}
+        <div class="top">
+          ${t.image ? `<img src="${esc(t.image)}" alt="">` : ''}
+          <div class="veil"></div>
+          <div class="name">
+            <h4>${esc(t.label)}</h4>
+            ${t.hotelClass && STARS[t.hotelClass] ? `<div class="stars">${STARS[t.hotelClass]}</div>` : ''}
+          </div>
+        </div>
+        <div class="body">
+          <p class="price">${esc(m(t.price))}</p>
+          <p class="per">${esc(m(t.perAdult))} للبالغ الواحد</p>
+          ${t.hotelName ? `<p class="hotel">${esc(t.hotelName)}</p>` : ''}
+          ${t.extras.length ? `<ul>${t.extras.map((e) => `<li><span>${esc(e)}</span></li>`).join('')}</ul>` : ''}
+        </div>
       </div>`,
         )
-        .join('\n      ')}
+        .join('')}
     </div>
 
     <div class="two">
@@ -379,6 +435,10 @@ ${
         <h4>لا يشمل</h4>
         <ul>${doc.excludes.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>
       </div>
+    </div>
+    <div class="assure">
+      <span>كل الخيارات تشمل الاستقبال من المطار وسيارة خاصة طوال البرنامج</span>
+      <b class="ltr num">${esc(whatsappDisplay())}</b>
     </div>
     ${footer('الخيارات')}
   </div>

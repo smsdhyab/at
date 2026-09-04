@@ -47,7 +47,10 @@ export function toOfferDoc(i: OfferDocInput): OfferDoc {
   const recommended: Tier = 'premium';
   const chosen = i.offers.find((o) => o.tier === recommended) ?? i.offers[0]!;
 
-  const tiers: OfferTier[] = i.offers.map((o) => ({
+  // صورة مختلفة لكل فئة ما دامت الصور تكفي، وإلا تتكرر الأولى
+  const images = [i.heroImage, ...(i.gallery ?? [])].filter((x): x is string => Boolean(x));
+
+  const tiers: OfferTier[] = i.offers.map((o, idx) => ({
     label: o.label,
     hotelName: o.hotelName,
     hotelClass: i.hotelClasses[o.tier],
@@ -56,6 +59,7 @@ export function toOfferDoc(i: OfferDocInput): OfferDoc {
     perAdult: o.perAdult,
     extras: TIER_EXTRAS[o.tier],
     recommended: o.tier === recommended,
+    image: images[idx] ?? images[0],
   }));
 
   const includes = [

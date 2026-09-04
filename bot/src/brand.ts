@@ -35,6 +35,7 @@ export const palette = {
   line: '#D3DAD6',
   lineSoft: '#E4EAE7',
   tealSoft: '#E7F1F0',
+  copperSoft: '#F7EDE2',
 } as const;
 
 /** رقم الواتساب بصيغة عرض: ‎+90 501 319 6750‎ */
