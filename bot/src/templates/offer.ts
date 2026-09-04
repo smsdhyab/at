@@ -94,9 +94,6 @@ export function offerHtml(doc: OfferDoc): string {
 <head>
 <meta charset="utf-8">
 <title>${esc(doc.serial)} — ${esc(doc.destinationName)}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="${fonts.googleHref}">
 <style>
 ${fontFaceCss()}
   @page { size: A4; margin: 0; }

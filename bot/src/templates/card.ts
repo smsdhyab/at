@@ -42,9 +42,6 @@ export function cardHtml(doc: CardDoc, size: CardSize = 'square'): string {
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="${fonts.googleHref}">
 <style>
 ${fontFaceCss()}
   * { box-sizing: border-box; margin: 0; padding: 0; }

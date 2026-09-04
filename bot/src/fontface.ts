@@ -1,29 +1,28 @@
 /**
- * خط «قمرة» مضمَّناً في المستند.
+ * خطوط ثمانية مضمَّنة في المستند.
  *
- * يُضمَّن كـ data URI لا كملف: المتصفح البعيد (Browserless على Supabase) لا يرى
- * قرصنا، فمسار الملف لا ينفعه. الضمّ يجعل المستند مستقلاً عن أي شبكة أو مسار.
+ * تُضمَّن كـ data URI لا كملف: المتصفح البعيد (Browserless على Supabase) لا يرى
+ * قرصنا، فمسار الملف لا ينفعه. والضمّ يجعل المستند مستقلاً عن الشبكة تماماً —
+ * لا انتظار Google Fonts ولا خطر أن يصل الزبون مستنداً بخط بديل.
  *
- * `unicode-range` مقصود ومهم: ملف الخط يربط أرقام ASCII بأرقام هندية (٠١٢٣)،
- * فلو تُرك على حاله لظهر السعر ‎$٣,٤٦٠‎ ورقم الواتساب بأرقام هندية. بحصر الخط
- * في نطاقات العربية وحدها تسقط الأرقام والحروف اللاتينية تلقائياً إلى الخط
- * التالي في السلسلة — فتبقى الأسعار بأرقام غربية والعربية بخط قمرة.
+ * صيغة woff2 لا otf: مضغوطة وأصغر بكثير، وChromium يقرأها.
+ *
+ * ملاحظة على الأرقام: هذه العائلة تُظهر الأرقام غربية (0-9) كما يجب في مستند
+ * أسعار، فلا حاجة لحصر نطاق المحارف كما لزم مع خط سابق كان يقلبها هندية.
  */
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** نطاقات العربية وعلامات الاقتباس والشرطات — بلا أرقام ولا لاتيني. */
-const ARABIC_RANGES = [
-  'U+0600-06FF', // العربية
-  'U+0750-077F', // ملحق العربية
-  'U+08A0-08FF', // العربية الموسّعة
-  'U+FB50-FDFF', // أشكال العرض أ
-  'U+FE70-FEFF', // أشكال العرض ب
-  'U+00AB', 'U+00BB', // « »
-  'U+2010-2015', // الشرطات
-  'U+2018-201F', // علامات الاقتباس
-].join(', ');
+/** [العائلة، الملف، الوزن] — الأوزان المستعملة فعلاً في القوالب فقط. */
+const FACES: ReadonlyArray<readonly [string, string, number]> = [
+  ['Thmanyah Display', 'thmanyah-display-Bold.woff2', 700],
+  ['Thmanyah Display', 'thmanyah-display-Black.woff2', 900],
+  ['Thmanyah Sans', 'thmanyah-sans-Light.woff2', 300],
+  ['Thmanyah Sans', 'thmanyah-sans-Regular.woff2', 400],
+  ['Thmanyah Sans', 'thmanyah-sans-Medium.woff2', 500],
+  ['Thmanyah Sans', 'thmanyah-sans-Bold.woff2', 700],
+];
 
 let cached: string | null = null;
 
@@ -31,26 +30,23 @@ let cached: string | null = null;
 export function fontFaceCss(): string {
   if (cached !== null) return cached;
 
-  const path = join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'qomra.ttf');
-  let dataUri: string;
-  try {
-    dataUri = `data:font/ttf;base64,${readFileSync(path).toString('base64')}`;
-  } catch {
-    // بلا ملف الخط يبقى المستند صالحاً بالخط الاحتياطي بدل أن ينهار
-    console.warn('ملف الخط assets/qomra.ttf غير موجود — سيُستعمل الخط الاحتياطي.');
-    cached = '';
-    return cached;
+  const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'assets');
+  const rules: string[] = [];
+
+  for (const [family, file, weight] of FACES) {
+    try {
+      const b64 = readFileSync(join(dir, file)).toString('base64');
+      rules.push(
+        `@font-face{font-family:"${family}";` +
+          `src:url(data:font/woff2;base64,${b64}) format("woff2");` +
+          `font-weight:${weight};font-style:normal;font-display:block}`,
+      );
+    } catch {
+      // ملف ناقص لا يوقف التوليد — يسقط إلى الخط الاحتياطي
+      console.warn(`ملف الخط ${file} غير موجود — سيُستعمل الخط الاحتياطي لهذا الوزن.`);
+    }
   }
 
-  // الملف بوزن واحد. تعريفه عند 400 فقط يجعل المتصفح يصطنع العريض عند طلب 600
-  // أو 700، وهو أوضح في العناوين من استعمال نفس الوزن لكل الأثقال.
-  cached = `@font-face{
-  font-family:"Qomra";
-  src:url(${dataUri}) format("truetype");
-  font-weight:400;
-  font-style:normal;
-  font-display:block;
-  unicode-range:${ARABIC_RANGES};
-}`;
+  cached = rules.join('\n');
   return cached;
 }

@@ -60,11 +60,10 @@ export const palette = {
  * القيمة هنا — لا تعديل في أي مكان آخر.
  */
 export const fonts = {
-  googleHref:
-    'https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600&display=swap',
-  // قمرة للعربية وحدها (انظر fontface.ts)، وReadex Pro تلتقط الأرقام واللاتيني
-  display: '"Qomra", "Readex Pro", "Segoe UI", Tahoma, sans-serif',
-  body: '"Qomra", "Readex Pro", "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif',
+  // لا رابط خارجي: الخطوط مضمَّنة كاملة في المستند (انظر fontface.ts).
+  // المستند صار مستقلاً عن الشبكة — يُطبع بالخط نفسه ولو انقطع الاتصال.
+  display: '"Thmanyah Display", "Segoe UI", Tahoma, serif',
+  body: '"Thmanyah Sans", "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif',
 } as const;
 
 /** رقم الواتساب بصيغة عرض: ‎+90 501 319 6750‎ */
