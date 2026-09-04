@@ -1,0 +1,24 @@
+{
+  "name": "aat-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "بوت تليغرام لإدارة عمليات المسافرون العرب",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env src/bot.ts",
+    "start": "node --env-file-if-exists=.env src/bot.ts",
+    "test": "node --test src/*.test.ts",
+    "migrate": "node --env-file-if-exists=.env src/migrate.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "grammy": "^1.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.0"
+  }
+}
