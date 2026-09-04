@@ -12,9 +12,9 @@
 import { Bot, InlineKeyboard, Keyboard, type Context } from 'grammy';
 import * as db from './db.ts';
 import { runMigrations } from './migrate.ts';
-import { startQuote, handleQuoteCallback } from './flows/quote.ts';
-import { startRates, handleRatesCallback } from './flows/rates.ts';
-import { takeText, clearText, dropDraft } from './state.ts';
+import { startQuote, handleQuoteCallback, handleQuoteStep } from './flows/quote.ts';
+import { startRates, handleRatesCallback, handleRatesStep } from './flows/rates.ts';
+import { getSession, dropSession } from './state.ts';
 import { fmt } from './ui.ts';
 
 const token = process.env.TELEGRAM_TOKEN;
@@ -168,7 +168,7 @@ async function showSettings(ctx: Context, edit = false) {
 
 bot.command(['start', 'help'], (ctx) => showMenu(ctx));
 bot.command('cancel', async (ctx) => {
-  dropDraft(ctx.from!.id);
+  dropSession(ctx.from!.id);
   await showMenu(ctx, 'أُلغي.');
 });
 bot.command('quote', startQuote);
@@ -216,18 +216,24 @@ bot.on('message:text', async (ctx) => {
 
   // زر القائمة يقطع أي خطوة جارية — الضغط عليه يعني تبديل المسار
   switch (text) {
-    case BTN.quote:    clearText(ctx.from.id); return void (await startQuote(ctx));
-    case BTN.rates:    clearText(ctx.from.id); return void (await startRates(ctx));
-    case BTN.recent:   clearText(ctx.from.id); return void (await showRecent(ctx));
-    case BTN.stats:    clearText(ctx.from.id); return void (await showStats(ctx));
-    case BTN.settings: clearText(ctx.from.id); return void (await showSettings(ctx));
+    case BTN.quote:    dropSession(ctx.from.id); return void (await startQuote(ctx));
+    case BTN.rates:    dropSession(ctx.from.id); return void (await startRates(ctx));
+    case BTN.recent:   return void (await showRecent(ctx));
+    case BTN.stats:    return void (await showStats(ctx));
+    case BTN.settings: return void (await showSettings(ctx));
   }
 
-  const handler = takeText(ctx.from.id);
-  if (handler) {
-    await handler(ctx, text);
-    return;
+  // خطوة منتظرة؟ توزَّع على معالجها حسب بادئة اسمها
+  const session = getSession(ctx.from.id);
+  if (session.step) {
+    const handled = session.step.startsWith('q.')
+      ? await handleQuoteStep(ctx, session, text)
+      : session.step.startsWith('r.')
+        ? await handleRatesStep(ctx, session, text)
+        : false;
+    if (handled) return;
   }
+
   await showMenu(ctx, 'اختر من الأزرار في الأسفل:');
 });
 
