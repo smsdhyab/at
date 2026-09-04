@@ -13,6 +13,7 @@ import { InlineKeyboard, InputFile, type Context } from 'grammy';
 import {
   threeTiers,
   planRooms,
+  toCents,
   type QuoteInput,
   type Tier,
   type TierOffer,
@@ -204,6 +205,63 @@ export async function handleQuoteStep(ctx: Context, s: Session, text: string): P
       return true;
     }
 
+    case 'q.guide': {
+      const n = parseInt(text.replace(/\D/g, ''), 10);
+      if (!Number.isFinite(n) || n < 0 || n > 30) {
+        await ctx.reply('اكتب رقماً بين 0 و30.');
+        return true;
+      }
+      s.draft.guideDays = n;
+      await clearStep(s);
+      await ctx.reply(n ? `✅ مرشد ${n} يوم` : '✅ بلا مرشد');
+      await showResult(ctx, s);
+      return true;
+    }
+
+    case 'q.transfers': {
+      const n = parseInt(text.replace(/\D/g, ''), 10);
+      if (!Number.isFinite(n) || n < 0 || n > 10) {
+        await ctx.reply('اكتب رقماً بين 0 و10.');
+        return true;
+      }
+      s.draft.transfers = n;
+      await clearStep(s);
+      await ctx.reply(`✅ ${n} نقلة مطار`);
+      await showResult(ctx, s);
+      return true;
+    }
+
+    case 'q.extras': {
+      const nums = text.trim().split(/[\s،,]+/).map((x) => toCents(x));
+      if (nums.length < 1) {
+        await ctx.reply('اكتب ثلاثة أرقام: <code>5 25 0</code>', { parse_mode: 'HTML' });
+        return true;
+      }
+      s.draft.simPerPerson = nums[0] ?? 0;
+      s.draft.dinnerPerPerson = nums[1] ?? 0;
+      s.draft.miscTotal = nums[2] ?? 0;
+      await clearStep(s);
+      await ctx.reply(
+        `✅ شريحة ${fmt(s.draft.simPerPerson)} · عشاء ${fmt(s.draft.dinnerPerPerson)} · ` +
+          `متفرقات ${fmt(s.draft.miscTotal)}`,
+      );
+      await showResult(ctx, s);
+      return true;
+    }
+
+    case 'q.margin': {
+      const n = parseInt(text.replace(/\D/g, ''), 10);
+      if (!Number.isFinite(n) || n < 0 || n > 80) {
+        await ctx.reply('اكتب نسبة بين 0 و80.');
+        return true;
+      }
+      s.draft.marginPct = n > 0 ? n : undefined;
+      await clearStep(s);
+      await ctx.reply(n ? `✅ هامش موحّد ${n}٪` : '✅ عاد لهوامش الفئات');
+      await showResult(ctx, s);
+      return true;
+    }
+
     case 'q.customer': {
       const clean = text.trim();
       const skip = clean === '-' || clean === '';
@@ -251,6 +309,15 @@ async function buildOffers(s: Session): Promise<Built | null> {
   };
   const tripleOf = (h: db.Hotel | undefined) => (h ?? fallback).rate_triple;
 
+  // الفندق المختار يدوياً يتقدّم على الاختيار التلقائي بالفئة
+  const auto: Record<Tier, db.Hotel | undefined> = {
+    economy: three, premium: four, vip: five ?? cabin,
+  };
+  const hotelFor = (t: Tier): db.Hotel => {
+    const id = d.hotelIds?.[t];
+    return (id ? all.find((h) => h.id === id) : undefined) ?? auto[t] ?? fallback;
+  };
+
   const [sedan, van, vip] = await Promise.all([
     db.carByKind(dest.slug, 'sedan'),
     db.carByKind(dest.slug, 'van'),
@@ -268,21 +335,21 @@ async function buildOffers(s: Session): Promise<Built | null> {
     childrenBed: d.childrenBed ?? 0,
     // الموسم مطبّق في سعر الفندق المختار أعلاه — لا يُطبّق مرتين
     season: 'normal',
-    hotelRate: rateOf(four),
-    tripleExtra: tripleOf(four),
+    hotelRate: rateOf(hotelFor('premium')),
+    tripleExtra: tripleOf(hotelFor('premium')),
     hotelNights: d.nights,
     carRate: van?.rate_day ?? 0,
     carDays: Math.max(0, d.nights - 1),
-    transfers: 2,
+    transfers: d.transfers ?? 2,
     transferRate: dest.transfer_rate,
     tours: tours.map((t) => ({ name: t.name, price: t.price })),
     ticketPerPerson: dest.ticket_pp,
     guideDays: d.guideDays ?? 0,
     guideRate: dest.guide_rate,
-    simPerPerson: 0,
-    dinnerPerPerson: 0,
-    miscTotal: 0,
-    marginPct: 22,
+    simPerPerson: d.simPerPerson ?? 0,
+    dinnerPerPerson: d.dinnerPerPerson ?? 0,
+    miscTotal: d.miscTotal ?? 0,
+    marginPct: d.marginPct ?? 22,
     feesBp: FEES_BP,
     depositPct: DEPOSIT_PCT,
     roundTo: ROUND_TO,
@@ -290,16 +357,19 @@ async function buildOffers(s: Session): Promise<Built | null> {
 
   const rates: Record<Tier, TierRates> = {
     economy: {
-      hotelRate: rateOf(three), tripleExtra: tripleOf(three),
-      carRate: sedan?.rate_day ?? 0, guideIncluded: false, hotelName: (three ?? fallback).name,
+      hotelRate: rateOf(hotelFor('economy')), tripleExtra: tripleOf(hotelFor('economy')),
+      carRate: sedan?.rate_day ?? 0, guideIncluded: false,
+      hotelName: hotelFor('economy').name, marginPct: d.marginPct,
     },
     premium: {
-      hotelRate: rateOf(four), tripleExtra: tripleOf(four),
-      carRate: van?.rate_day ?? 0, guideIncluded: false, hotelName: (four ?? fallback).name,
+      hotelRate: rateOf(hotelFor('premium')), tripleExtra: tripleOf(hotelFor('premium')),
+      carRate: van?.rate_day ?? 0, guideIncluded: false,
+      hotelName: hotelFor('premium').name, marginPct: d.marginPct,
     },
     vip: {
-      hotelRate: rateOf(five ?? cabin), tripleExtra: tripleOf(five ?? cabin),
-      carRate: vip?.rate_day ?? 0, guideIncluded: true, hotelName: (five ?? cabin ?? fallback).name,
+      hotelRate: rateOf(hotelFor('vip')), tripleExtra: tripleOf(hotelFor('vip')),
+      carRate: vip?.rate_day ?? 0, guideIncluded: true,
+      hotelName: hotelFor('vip').name, marginPct: d.marginPct,
     },
   };
 
@@ -314,9 +384,9 @@ async function buildOffers(s: Session): Promise<Built | null> {
     route: splitNights(route, d.nights),
     practical: parsePractical(dest.practical),
     hotelClasses: {
-      economy: (three ?? fallback).class,
-      premium: (four ?? fallback).class,
-      vip: (five ?? cabin ?? fallback).class,
+      economy: hotelFor('economy').class,
+      premium: hotelFor('premium').class,
+      vip: hotelFor('vip').class,
     },
   };
 }
@@ -360,6 +430,7 @@ async function showResult(ctx: Context, s: Session): Promise<void> {
   const kb = new InlineKeyboard()
     .text('📄 ملف PDF', 'q:pdf')
     .text('🖼️ صورة', 'q:img').row()
+    .text('✏️ عدّل العرض', 'q:edit').row()
     .text('📝 البرنامج كتابياً', 'q:prog').row()
     .text('💬 نص مختصر للواتساب', 'q:text').row()
     .text('🔍 تفصيل داخلي', 'q:detail').row()
@@ -442,6 +513,67 @@ function programText(s: Session, built: Built): string {
   return lines.filter((l) => l !== null).join('\n');
 }
 
+
+/* ------------------------------ التعديل ------------------------------ */
+
+const TIER_AR: Record<Tier, string> = { economy: 'اقتصادي', premium: 'مميز', vip: 'VIP' };
+
+/** قائمة التعديل — كل ما يمكن تغييره قبل إصدار العرض. */
+async function editMenu(ctx: Context, s: Session, edit = false): Promise<void> {
+  const d = s.draft;
+  const kb = new InlineKeyboard()
+    .text('📅 التواريخ', 'q:ed:dates')
+    .text('👥 المسافرون', 'q:ed:pax').row()
+    .text('🗺️ الجولات', 'q:ed:tours')
+    .text('🏨 الفنادق', 'q:ed:hotels').row()
+    .text('🧭 المرشد', 'q:ed:guide')
+    .text('🚕 نقلات المطار', 'q:ed:transfers').row()
+    .text('➕ خدمات إضافية', 'q:ed:extras')
+    .text('💰 الهامش', 'q:ed:margin').row()
+    .text('◀️ عُد للأسعار', 'q:calc');
+
+  const rows = [
+    '<b>تعديل العرض</b>',
+    '',
+    `📅 ${d.departDate ?? '—'} إلى ${d.returnDate ?? '—'} · ${d.nights} ليالٍ`,
+    `👥 ${d.adults} بالغ · ${d.childrenBed ?? 0} طفل (6+) · ${d.childrenFree ?? 0} دون السادسة`,
+    `🗺️ ${d.tourIds.length} جولة`,
+    `🧭 مرشد: ${d.guideDays ?? 0} يوم`,
+    `🚕 نقلات المطار: ${d.transfers ?? 2}`,
+    `➕ خدمات: ${fmt(d.simPerPerson ?? 0)} شريحة · ${fmt(d.dinnerPerPerson ?? 0)} عشاء · ${fmt(d.miscTotal ?? 0)} متفرقات`,
+    `💰 الهامش: ${d.marginPct ? `${d.marginPct}٪ موحّد` : 'حسب الفئة (18 · 22 · 28)'}`,
+  ];
+  const text = rows.join('\n');
+  if (edit) await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
+  else await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
+}
+
+/** اختيار الفئة التي يُبدَّل فندقها. */
+async function hotelTierMenu(ctx: Context, s: Session): Promise<void> {
+  const kb = new InlineKeyboard();
+  for (const t of ['economy', 'premium', 'vip'] as Tier[]) {
+    kb.text(TIER_AR[t], `q:ht:${t}`);
+  }
+  kb.row().text('◀️ رجوع', 'q:edit');
+  await ctx.editMessageText('أي فئة تريد تبديل فندقها؟', { reply_markup: kb });
+}
+
+/** قائمة فنادق الوجهة لاختيار واحد لهذه الفئة. */
+async function hotelPicker(ctx: Context, s: Session, tier: Tier): Promise<void> {
+  const hotels = await db.listHotels(s.draft.destination!);
+  const current = s.draft.hotelIds?.[tier];
+  const kb = new InlineKeyboard();
+  for (const h of hotels) {
+    const mark = h.id === current ? '✅ ' : '';
+    kb.text(`${mark}${h.name} — ${fmt(h.rate_normal)}`, `q:hs:${tier}:${h.id}`).row();
+  }
+  kb.text('↩️ عُد للاختيار التلقائي', `q:hs:${tier}:0`).row().text('◀️ رجوع', 'q:ed:hotels');
+  await ctx.editMessageText(`فندق فئة <b>${TIER_AR[tier]}</b>:`, {
+    parse_mode: 'HTML',
+    reply_markup: kb,
+  });
+}
+
 /* ------------------------------ التوجيه ------------------------------ */
 
 /** يعالج كل أزرار `q:*`. يعيد true إن كان الزر يخصّه. */
@@ -456,6 +588,72 @@ export async function handleQuoteCallback(ctx: Context, parts: string[]): Promis
   };
 
   switch (action) {
+    case 'edit': {
+      if (!(await needDraft())) return true;
+      await ctx.answerCallbackQuery();
+      await editMenu(ctx, s);
+      return true;
+    }
+
+    case 'ed': {
+      if (!(await needDraft())) return true;
+      await ctx.answerCallbackQuery();
+      switch (value) {
+        case 'dates':   await askDates(ctx, s); return true;
+        case 'pax':     await askAdults(ctx, s); return true;
+        case 'tours':   await askTours(ctx, s); return true;
+        case 'hotels':  await hotelTierMenu(ctx, s); return true;
+        case 'guide':
+          await expectStep(s, 'q.guide');
+          await ctx.reply('كم يوماً للمرشد العربي؟ اكتب <code>0</code> لإلغائه.', {
+            parse_mode: 'HTML',
+          });
+          return true;
+        case 'transfers':
+          await expectStep(s, 'q.transfers');
+          await ctx.reply('كم نقلة مطار؟ (استقبال + توديع = 2)');
+          return true;
+        case 'extras':
+          await expectStep(s, 'q.extras');
+          await ctx.reply(
+            'اكتب ثلاثة أرقام بالدولار:\n' +
+              '<code>الشريحة  العشاء  المتفرقات</code>\n\n' +
+              'الشريحة والعشاء للشخص الواحد، والمتفرقات إجمالية.\n' +
+              'مثال: <code>5 25 0</code> — أو <code>0 0 0</code> لإلغائها.',
+            { parse_mode: 'HTML' },
+          );
+          return true;
+        case 'margin':
+          await expectStep(s, 'q.margin');
+          await ctx.reply(
+            'هامش موحّد لكل الفئات بالنسبة المئوية.\n' +
+              'اكتب <code>0</code> للعودة لهوامش الفئات (18 · 22 · 28).',
+            { parse_mode: 'HTML' },
+          );
+          return true;
+        default:
+          return true;
+      }
+    }
+
+    case 'ht': {
+      if (!(await needDraft())) return true;
+      await ctx.answerCallbackQuery();
+      await hotelPicker(ctx, s, value as Tier);
+      return true;
+    }
+
+    case 'hs': {
+      if (!(await needDraft())) return true;
+      const tier = value as Tier;
+      const id = Number(parts[3]);
+      s.draft.hotelIds = { ...s.draft.hotelIds, [tier]: id > 0 ? id : undefined };
+      await save(s);
+      await ctx.answerCallbackQuery(id > 0 ? 'تم التبديل' : 'عاد للاختيار التلقائي');
+      await showResult(ctx, s);
+      return true;
+    }
+
     case 'dest': {
       const dest = await db.getDestination(value ?? '');
       if (!dest) return answer(ctx, 'وجهة غير معروفة');

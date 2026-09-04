@@ -29,6 +29,15 @@ export interface DraftData {
   /** معرّفات الجولات المختارة — مصفوفة لا Set، لأن Set لا يُحوَّل إلى JSON. */
   tourIds: number[];
   guideDays?: number;
+  /** فندق مختار يدوياً لكل فئة — يتجاوز الاختيار التلقائي. */
+  hotelIds?: { economy?: number; premium?: number; vip?: number };
+  /** تجاوزات يدوية على الحساب. */
+  transfers?: number;
+  simPerPerson?: number;
+  dinnerPerPerson?: number;
+  miscTotal?: number;
+  /** هامش موحّد يتجاوز هوامش الفئات الثلاث. */
+  marginPct?: number;
   customerName?: string;
   customerPhone?: string;
   savedId?: number;

@@ -260,6 +260,8 @@ export interface TierRates {
   carRate: number;
   /** هل تشمل الفئة مرشداً طوال البرنامج. */
   guideIncluded: boolean;
+  /** هامش يتجاوز هامش الفئة الافتراضي. */
+  marginPct?: number;
   hotelName?: string;
 }
 
@@ -282,7 +284,7 @@ export function threeTiers(base: QuoteInput, rates: Record<Tier, TierRates>): Ti
       tripleExtra: r.tripleExtra,
       carRate: r.carRate,
       guideDays: r.guideIncluded ? Math.max(base.guideDays, base.carDays) : base.guideDays,
-      marginPct: TIER_MARGIN_PCT[tier],
+      marginPct: r.marginPct ?? TIER_MARGIN_PCT[tier],
     });
     return { ...result, tier, label: TIER_LABEL[tier], hotelName: r.hotelName };
   });
