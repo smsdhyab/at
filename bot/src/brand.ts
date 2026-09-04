@@ -34,6 +34,10 @@ export const palette = {
   sun: '#EFB94F',
   mint: '#CFE9DC',
   cream: '#FDFAF6',
+  // تدرّج السماء: يحلّ محل الأبيض في أعلى الصفحة فتقرأ الورقة كمشهد واحد
+  sky: '#D3E9F0',
+  skyMid: '#E3F1F3',
+  skyLow: '#F0F8F6',
   card: '#FFFFFF',
   ink: '#2C464E',
   ink2: '#55707A',

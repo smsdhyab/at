@@ -89,10 +89,23 @@ test('الأقسام الفارغة تُحذف ولا تترك صناديق فا
   assert.ok(bare.includes('ثلاثة خيارات'), 'قسم الخيارات يجب أن يبقى دائماً');
 });
 
-test('كل نص من المستخدم مهروب قبل أن يدخل الصفحة', () => {
-  const html = offerHtml({ ...doc, customerName: '<script>alert(1)</script>' });
-  assert.ok(!html.includes('<script>alert(1)</script>'), 'وسم من بيانات المستخدم دخل الصفحة كما هو');
+test('كل نص من البيانات مهروب قبل أن يدخل الصفحة', () => {
+  // اسم الوجهة واسم الفندق يأتيان من قاعدة البيانات التي يملأها الفريق —
+  // حدّ ثقة يجب أن يُهرَّب مهما كان مصدره موثوقاً.
+  const evil = '<script>alert(1)</script>';
+  const html = offerHtml({
+    ...doc,
+    destinationName: evil,
+    tiers: doc.tiers.map((t) => ({ ...t, hotelName: evil })),
+  });
+  assert.ok(!html.includes(evil), 'وسم من البيانات دخل الصفحة كما هو');
   assert.ok(html.includes('&lt;script&gt;'), 'الهروب لم يحدث');
+});
+
+test('المستند عام لا يحمل اسم زبون بعينه', () => {
+  const html = offerHtml({ ...doc, customerName: 'أبو محمد العتيبي' });
+  assert.ok(!html.includes('أبو محمد العتيبي'), 'اسم الزبون ظهر في برنامج عام');
+  assert.ok(html.includes('عن هذا البرنامج'), 'صفحة التعريف بالبرنامج غائبة');
 });
 
 test('الصور تصل إلى المستند والبطاقة', () => {

@@ -144,7 +144,7 @@ ${fontFaceCss()}
     font-size: 11pt;
     line-height: 1.65;
     color: ${palette.ink};
-    background: ${palette.cream};
+    background: ${palette.skyLow};
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -155,21 +155,35 @@ ${fontFaceCss()}
     width: 210mm; height: 297mm;
     page-break-after: always;
     position: relative; overflow: hidden;
-    background: ${palette.cream};
+    background: ${palette.skyLow};
   }
   .sheet:last-child { page-break-after: auto; }
   .pad { position: relative; height: 100%; padding: 18mm 16mm 12mm; display: flex; flex-direction: column; }
 
+  /* التذييل يقع فوق الصورة، فيحتاج أرضيته الخاصة وإلا ضاع. */
   .foot {
-    margin-top: auto; padding-top: 5mm;
-    border-top: 0.2mm solid ${palette.lineSoft};
+    margin-top: auto;
+    background: rgba(255,255,255,.86);
+    border-radius: 2mm;
+    padding: 2.6mm 4mm;
     display: flex; justify-content: space-between; gap: 4mm;
-    font-size: 7.5pt; color: ${palette.muted};
+    font-size: 8pt; font-weight: 500; color: ${palette.seaDeep};
   }
 
-  h3.sec { font-family: ${fonts.display}; font-size: 21pt; font-weight: 700; color: ${palette.seaDeep}; margin: 0 0 1.5mm; }
-  .sec-note { font-size: 9.5pt; color: ${palette.muted}; margin: 0 0 4mm; }
-  .sec-rule { height: 0.5mm; background: ${palette.sand}; width: 16mm; margin: 0 0 6mm; }
+  /* رأس القسم: كلمة صغيرة بلون الشمس، ثم عنوان ثقيل، ثم خطّان بلونين. */
+  .sec-eyebrow {
+    font-size: 9pt; font-weight: 600; color: ${palette.sand};
+    margin: 0 0 1.5mm;
+  }
+  h3.sec {
+    font-family: ${fonts.display}; font-size: 26pt; font-weight: 900;
+    color: ${palette.seaDeep}; margin: 0 0 2mm; line-height: 1.15;
+  }
+  .sec-note { font-size: 9.5pt; color: ${palette.ink2}; margin: 0 0 4mm; }
+  .sec-rule {
+    height: 1mm; width: 26mm; margin: 0 0 7mm; border-radius: 1mm;
+    background: linear-gradient(to left, ${palette.sand} 0 14mm, ${palette.sea} 14mm 100%);
+  }
 
   /* ---------------- الغلاف ---------------- */
   .cover { color: #fff; }
@@ -204,10 +218,7 @@ ${fontFaceCss()}
 
   /* ---------------- رسالة الترحيب ---------------- */
   .letter { font-size: 11.5pt; line-height: 1.95; color: ${palette.ink2}; max-width: 155mm; }
-  .letter .hi { font-family: ${fonts.display}; font-size: 22pt; font-weight: 700; color: ${palette.seaDeep}; margin: 0 0 4mm; }
   .letter p { margin: 0 0 4mm; }
-  .sign { margin-top: 6mm; font-size: 10pt; color: ${palette.muted}; }
-  .sign b { display: block; font-size: 11.5pt; color: ${palette.seaDeep}; font-weight: 700; }
 
   .promises { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-top: 9mm; }
   .promise { background: #fff; border-radius: 4mm; padding: 5mm 5.5mm; box-shadow: 0 1mm 3mm rgba(46,157,168,.12); }
@@ -252,18 +263,20 @@ ${fontFaceCss()}
      بيضاء فارغة، والنص يبقى على أرضية نظيفة تماماً في أعلى الصفحة. */
   .bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
   .bg img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* سماء فوق وأرض تحت: الورقة تُقرأ كمشهد واحد لا كنص فوق بياض.
+     الطبقة معتمة تماماً في الأعلى حيث النص، ثم تنفتح عند الأفق. */
   .bg .fade {
     position: absolute; inset: 0;
     background:
       linear-gradient(to bottom,
-        ${palette.cream} 0%,
-        ${palette.cream} 50%,
-        rgba(253,250,246,.94) 60%,
-        rgba(253,250,246,.55) 70%,
-        rgba(253,250,246,.38) 84%,
-        rgba(253,250,246,.88) 95%,
-        ${palette.cream} 100%),
-      linear-gradient(to bottom, rgba(46,157,168,0) 55%, rgba(46,157,168,.14) 100%);
+        ${palette.sky} 0%,
+        ${palette.skyMid} 20%,
+        ${palette.skyLow} 38%,
+        rgba(240,248,246,.92) 50%,
+        rgba(240,248,246,.55) 60%,
+        rgba(240,248,246,.18) 72%,
+        rgba(240,248,246,.10) 88%,
+        rgba(240,248,246,.30) 100%);
   }
   .pad { z-index: 1; }
 
@@ -357,44 +370,45 @@ ${fontFaceCss()}
       <div class="cover-rule"></div>
       <p class="cover-price"><span>تبدأ من</span><strong>${esc(m(cheapest))}</strong></p>
       <div class="cover-bar">
-        <div><span>رقم العرض</span><strong class="ltr num">${esc(doc.serial)}</strong></div>
-        <div><span>المسافرون</span><strong>${esc(paxLine(doc.travelers))}</strong></div>
+        <div><span>رقم البرنامج</span><strong class="ltr num">${esc(doc.serial)}</strong></div>
+        <div><span>السعر مبني على</span><strong>${esc(paxLine(doc.travelers))}</strong></div>
         <div><span>تاريخ الإصدار</span><strong class="ltr num">${esc(doc.issueDate)}</strong></div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ============ 2 · رسالة ترحيب ============ -->
+<!-- ============ 2 · عن البرنامج ============ -->
 <div class="sheet">
   ${pageBg()}
   <div class="pad">
+    <p class="sec-eyebrow">برنامج مصمَّم بعناية</p>
+    <h3 class="sec">عن هذا البرنامج</h3>
+    <div class="sec-rule"></div>
+
     <div class="letter">
-      <p class="hi">${doc.customerName ? `أهلاً بكم ${esc(doc.customerName)}` : 'أهلاً وسهلاً بكم'}</p>
       <p>
-        يسعدنا أن نضع بين أيديكم مقترح رحلتكم إلى ${esc(doc.destinationName)} لمدة
-        ${doc.days} أيام${doc.travelMonth ? ` في ${esc(doc.travelMonth)}` : ''}.
-        أعددنا هذا البرنامج لـ ${esc(paxLine(doc.travelers))} تحديداً، لا نسخة جاهزة.
+        برنامج ${esc(doc.destinationName)} لمدة ${doc.days} أيام و${doc.nights} ليالٍ،
+        صُمِّم ليجمع بين أشهر معالم المنطقة ووقت كافٍ للراحة — لا برنامج مزدحم
+        يُنهك المسافر، ولا فارغ يضيّع رحلته.
       </p>
       <p>
         ستجدون في الصفحات التالية البرنامج يوماً بيوم، والمدن التي تنامون فيها،
-        وثلاثة خيارات تختلف في فئة الفندق والسيارة لا في الجولات — لتختاروا ما يناسبكم
-        دون أن ينقص من رحلتكم شيء.
+        وثلاثة خيارات تختلف في فئة الفندق والسيارة لا في الجولات — لتختاروا ما
+        يناسب ميزانيتكم دون أن ينقص من رحلتكم شيء.
       </p>
       <p>
-        وإن أردتم تعديل أي يوم أو إضافة جولة أو تغيير فندق، راسلونا وسنعيد ترتيبه لكم.
+        الأسعار في هذا المستند مبنية على ${esc(paxLine(doc.travelers))}
+        في ${doc.travelers.rooms} ${doc.travelers.rooms === 1 ? 'غرفة' : 'غرف'}.
+        أي تغيير في عدد المسافرين أو المدة أو الفنادق نعيد تسعيره لكم فوراً.
       </p>
-      <div class="sign">
-        مع تحياتنا،
-        <b>${esc(brand.legalName || brand.name)}</b>
-      </div>
     </div>
 
     <div class="promises">
       ${PROMISES.map(([t, d]) => `<div class="promise"><b>${esc(t)}</b><span>${esc(d)}</span></div>`).join('')}
     </div>
 
-    ${footer('ترحيب')}
+    ${footer('عن البرنامج')}
   </div>
 </div>
 
@@ -404,6 +418,7 @@ ${dayPages
     (page, idx) => `<div class="sheet">
   ${pageBg()}
   <div class="pad">
+    <p class="sec-eyebrow">رحلتكم خطوة بخطوة</p>
     <h3 class="sec">البرنامج يوماً بيوم${dayPages.length > 1 ? ` (${idx + 1}/${dayPages.length})` : ''}</h3>
     <p class="sec-note">جميع الجولات بسيارة خاصة مع سائق. الترتيب قابل للتبديل حسب الطقس دون نقصان في العدد.</p>
     <div class="sec-rule"></div>
@@ -431,6 +446,7 @@ ${dayPages
 <div class="sheet">
   ${pageBg()}
   <div class="pad">
+    <p class="sec-eyebrow">أين تنامون</p>
     <h3 class="sec">المسار والإقامة</h3>
     <p class="sec-note">أين تنامون كل ليلة، وفندق كل فئة.</p>
     <div class="sec-rule"></div>
@@ -472,6 +488,7 @@ ${dayPages
 <div class="sheet">
   ${pageBg()}
   <div class="pad">
+    <p class="sec-eyebrow">اختاروا ما يناسبكم</p>
     <h3 class="sec">ثلاثة خيارات</h3>
     <p class="sec-note">نفس البرنامج ونفس الجولات — الفرق في فئة الفندق والسيارة والخدمات.</p>
     <div class="sec-rule"></div>
@@ -506,6 +523,7 @@ ${dayPages
 <div class="sheet">
   ${pageBg()}
   <div class="pad">
+    <p class="sec-eyebrow">بوضوح تام</p>
     <h3 class="sec">ما يشمله العرض</h3>
     <div class="sec-rule"></div>
     <div class="two">
@@ -536,6 +554,7 @@ ${dayPages
 <div class="sheet">
   ${pageBg()}
   <div class="pad">
+    <p class="sec-eyebrow">الخطوة الأخيرة</p>
     <h3 class="sec">الحجز والدفع</h3>
     <div class="sec-rule"></div>
 
