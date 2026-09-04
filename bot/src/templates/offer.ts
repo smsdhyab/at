@@ -11,6 +11,7 @@
 import { brand, palette, fonts, whatsappDisplay } from '../brand.ts';
 import { fontFaceCss } from '../fontface.ts';
 import { money } from '../pricing.ts';
+import { sized, IMG } from '../imageurl.ts';
 import type { Day, RouteNight, Practical } from '../itinerary.ts';
 
 export interface OfferTier {
@@ -111,7 +112,7 @@ export function offerHtml(doc: OfferDoc): string {
   const pageBg = (): string => {
     if (!strip.length) return '';
     const url = strip[bgTurn++ % strip.length]!;
-    return `<div class="bg"><img src="${esc(url)}" alt=""><div class="fade"></div></div>`;
+    return `<div class="bg"><img src="${esc(sized(url, IMG.background))}" alt=""><div class="fade"></div></div>`;
   };
 
   const footer = (label: string) =>
@@ -353,7 +354,7 @@ ${fontFaceCss()}
 
 <!-- ============ 1 · الغلاف ============ -->
 <div class="sheet cover">
-  ${hero ? `<img class="bleed" src="${esc(hero)}" alt="">` : ''}
+  ${hero ? `<img class="bleed" src="${esc(sized(hero, IMG.cover))}" alt="">` : ''}
   <div class="scrim"></div>
   <div class="pad">
     <div class="cover-top">
@@ -498,7 +499,7 @@ ${dayPages
           (t) => `<div class="tier${t.recommended ? ' rec' : ''}">
         ${t.recommended ? '<div class="ribbon">الأكثر طلباً</div>' : ''}
         <div class="top">
-          ${t.image ? `<img src="${esc(t.image)}" alt="">` : ''}
+          ${t.image ? `<img src="${esc(sized(t.image, IMG.tier))}" alt="">` : ''}
           <div class="veil"></div>
           <div class="name">
             <h4>${esc(t.label)}</h4>
@@ -581,7 +582,7 @@ ${dayPages
     </ul>
 
     <div class="cta">
-      ${strip.at(-1) ? `<img src="${esc(strip.at(-1))}" alt="">` : ''}
+      ${strip.at(-1) ? `<img src="${esc(sized(strip.at(-1), IMG.cta))}" alt="">` : ''}
       <div class="scrim"></div>
       <div class="inner">
         <p>لتأكيد الحجز أو تعديل البرنامج، راسلونا مباشرة</p>

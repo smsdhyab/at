@@ -7,6 +7,7 @@
 import { brand, palette, fonts, whatsappDisplay } from '../brand.ts';
 import { fontFaceCss } from '../fontface.ts';
 import { money } from '../pricing.ts';
+import { sized, IMG } from '../imageurl.ts';
 
 export type CardSize = 'square' | 'story';
 
@@ -159,7 +160,7 @@ ${fontFaceCss()}
 </style>
 </head>
 <body>
-${doc.heroImage ? `<img class="bg" src="${esc(doc.heroImage)}" alt="">` : ''}
+${doc.heroImage ? `<img class="bg" src="${esc(sized(doc.heroImage, IMG.card))}" alt="">` : ''}
 <div class="scrim"></div>
 <div class="frame"></div>
 <div class="wrap">
