@@ -6,7 +6,7 @@
  * الموسم مرتين. معامل الموسم في المحرك مخصص للحالات التي لا تتوفر فيها أسعار
  * موسمية حقيقية (لوحة التحكم واستخدام يدوي).
  */
-import { InlineKeyboard, type Context } from 'grammy';
+import { InlineKeyboard, InputFile, type Context } from 'grammy';
 import {
   threeTiers,
   TIER_LABEL,
@@ -17,7 +17,11 @@ import {
 } from '../pricing.ts';
 import * as db from '../db.ts';
 import { expectText, newDraft, getDraft, dropDraft, type Draft } from '../state.ts';
-import { fmt, keyboard, tiersSummary, internalBreakdown, customerOffer } from '../ui.ts';
+import { fmt, keyboard, tiersSummary, internalBreakdown, customerOffer, CURRENCY } from '../ui.ts';
+import { toOfferDoc, toCardDoc } from '../offerdoc.ts';
+import { offerHtml, offerFooter } from '../templates/offer.ts';
+import { cardHtml, CARD_DIMENSIONS, type CardSize } from '../templates/card.ts';
+import { renderPdf, renderPng } from '../render.ts';
 
 /** إعدادات ثابتة — تنتقل للوحة التحكم في المرحلة الرابعة. */
 const FEES_BP = 250;
@@ -130,7 +134,14 @@ async function askTours(ctx: Context, draft: Draft, edit = false): Promise<void>
 /* ------------------------------ الحساب ------------------------------ */
 
 /** يبني مدخلات المحرك من المسودة وبيانات قاعدة الأسعار. */
-async function buildOffers(draft: Draft): Promise<{ offers: TierOffer[]; tourNames: string[]; input: QuoteInput } | null> {
+interface Built {
+  offers: TierOffer[];
+  tourNames: string[];
+  input: QuoteInput;
+  hotelClasses: Partial<Record<Tier, string>>;
+}
+
+async function buildOffers(draft: Draft): Promise<Built | null> {
   const dest = await db.getDestination(draft.destination!);
   if (!dest) return null;
 
@@ -202,7 +213,16 @@ async function buildOffers(draft: Draft): Promise<{ offers: TierOffer[]; tourNam
     },
   };
 
-  return { offers: threeTiers(input, rates), tourNames: tours.map((t) => t.name), input };
+  return {
+    offers: threeTiers(input, rates),
+    tourNames: tours.map((t) => t.name),
+    input,
+    hotelClasses: {
+      economy: (three ?? fallback).class,
+      premium: (four ?? fallback).class,
+      vip: (five ?? cabin ?? fallback).class,
+    },
+  };
 }
 
 async function showResult(ctx: Context, draft: Draft): Promise<void> {
@@ -214,7 +234,9 @@ async function showResult(ctx: Context, draft: Draft): Promise<void> {
   const { offers } = built;
 
   const kb = new InlineKeyboard()
-    .text('📄 نص العرض للزبون', 'q:text').row()
+    .text('📄 ملف PDF', 'q:pdf')
+    .text('🖼️ صورة', 'q:img').row()
+    .text('💬 نص للواتساب', 'q:text').row()
     .text('🔍 تفصيل داخلي', 'q:detail').row()
     .text('💾 احفظ العرض', 'q:save')
     .text('✖️ إلغاء', 'q:cancel');
@@ -320,6 +342,37 @@ export async function handleQuoteCallback(ctx: Context, parts: string[]): Promis
     return true;
   }
 
+  if (action === 'pdf' || action === 'img') {
+    if (!draft) return answer(ctx, 'انتهت الجلسة. ابدأ من /quote');
+    const built = await buildOffers(draft);
+    if (!built) return answer(ctx, 'تعذّر الحساب');
+    await ctx.answerCallbackQuery();
+    const wait = await ctx.reply('جارٍ التوليد…');
+    try {
+      const doc = buildDoc(draft, built);
+      if (action === 'pdf') {
+        const pdf = await renderPdf(offerHtml(doc), offerFooter(doc));
+        await ctx.replyWithDocument(new InputFile(pdf, `${doc.serial}.pdf`), {
+          caption: `عرض ${doc.destinationName} — ${doc.days} أيام`,
+        });
+      } else {
+        const size: CardSize = 'square';
+        const png = await renderPng(cardHtml(toCardDoc(doc), size), CARD_DIMENSIONS[size]);
+        await ctx.replyWithPhoto(new InputFile(png, 'offer.png'), {
+          caption: `${doc.destinationName} — تبدأ من ${fmt(Math.min(...doc.tiers.map((t) => t.price)))}`,
+        });
+      }
+    } catch (e) {
+      console.error('فشل التوليد:', e);
+      await ctx.reply(
+        `تعذّر توليد الملف.\n${e instanceof Error ? e.message : 'خطأ غير معروف'}`,
+      );
+    } finally {
+      await ctx.api.deleteMessage(wait.chat.id, wait.message_id).catch(() => {});
+    }
+    return true;
+  }
+
   if (action === 'cancel') {
     dropDraft(uid(ctx));
     await ctx.answerCallbackQuery('أُلغي');
@@ -361,6 +414,29 @@ async function persist(ctx: Context, draft: Draft, customer: { name: string | nu
     { parse_mode: 'HTML' },
   );
   dropDraft(uid(ctx));
+}
+
+/** يحوّل المسودة والعروض إلى مستند زبون — بلا تكلفة ولا ربح. */
+function buildDoc(draft: Draft, built: Built) {
+  return toOfferDoc({
+    serial: draft.savedId ? `AT-${new Date().getFullYear()}-${String(draft.savedId).padStart(4, '0')}` : 'مسودة',
+    destinationName: draft.destinationName!,
+    nights: draft.nights!,
+    travelers: {
+      adults: draft.adults!,
+      children: draft.children ?? 0,
+      infants: draft.infants ?? 0,
+      rooms: draft.rooms ?? 1,
+    },
+    offers: built.offers,
+    hotelClasses: built.hotelClasses,
+    tourNames: built.tourNames,
+    depositPct: DEPOSIT_PCT,
+    currency: CURRENCY,
+    travelMonth: draft.travelMonth,
+    customerName: draft.customerName,
+    hasTickets: built.input.ticketPerPerson > 0,
+  });
 }
 
 async function answer(ctx: Context, text: string): Promise<boolean> {

@@ -1,5 +1,17 @@
 # Node 24 يشغّل TypeScript مباشرة — لا خطوة بناء ولا مجلد dist.
-FROM node:24-alpine
+# صورة slim لا alpine: Chromium على alpine يحتاج ترقيعاً، وعلى debian يعمل من apt مباشرة.
+FROM node:24-slim
+
+# Chromium لتوليد PDF والصور، وخطوط نوتو كخط احتياطي للعربية
+# إن تعذّر تحميل خطوط جوجل وقت التوليد.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      chromium \
+      fonts-noto-core \
+      fonts-noto-color-emoji \
+      ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 WORKDIR /app
 
