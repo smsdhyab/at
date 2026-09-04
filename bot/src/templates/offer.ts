@@ -1,12 +1,12 @@
 /**
- * مستند عرض السعر — A4 عمودي RTL.
+ * مستند عرض السعر — A4 عمودي RTL، مبني حول الصورة.
  *
- * هذه **نسخة الزبون**. بنية البيانات `OfferDoc` لا تحتوي حقل تكلفة ولا ربح
- * إطلاقاً — ليس إخفاءً بل غياباً: ما لا يدخل الدالة لا يمكن أن يخرج منها.
- * فحص `render.test.ts` يتأكد أن أرقام التكلفة لا تظهر في المخرج.
+ * هذه **نسخة الزبون**. بنية `OfferDoc` لا تحتوي حقل تكلفة ولا ربح إطلاقاً —
+ * ليس إخفاءً بل غياباً: ما لا يدخل الدالة لا يمكن أن يخرج منها.
  *
- * التنسيق يعتمد على هوامش `@page` ليتولى المتصفح تقسيم الصفحات — لا صفحات
- * بارتفاع ثابت، فلا خطر قص المحتوى مهما طال البرنامج.
+ * التقسيم صفحات صريحة (`.sheet`) بارتفاع A4 كامل و`@page{margin:0}`، لأن
+ * الغلاف يحتاج صورة تملأ الورقة حتى حوافها — وهذا مستحيل مع هوامش `@page`.
+ * ثمن ذلك أن الطول مسؤوليتنا: الجولات تُقسَّم على صفحات بـ `chunk` أدناه.
  */
 import { brand, palette, whatsappDisplay } from '../brand.ts';
 import { money } from '../pricing.ts';
@@ -40,6 +40,10 @@ export interface OfferDoc {
   depositAmount: number;
   validDays: number;
   currency: string;
+  /** صورة الغلاف — من مكتبة صور الموقع. */
+  heroImage?: string;
+  /** صور إضافية للشريط. */
+  gallery?: string[];
 }
 
 const esc = (s: unknown): string =>
@@ -51,6 +55,16 @@ const esc = (s: unknown): string =>
 
 const STARS: Record<string, string> = { '3': '★★★', '4': '★★★★', '5': '★★★★★' };
 
+/** أقصى عدد جولات في الصفحة الواحدة قبل أن تُفتح صفحة جديدة. */
+const TOURS_PER_SHEET = 9;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  if (!items.length) return [];
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 function paxLine(t: OfferDoc['travelers']): string {
   const parts = [`${t.adults} بالغ`];
   if (t.children) parts.push(`${t.children} طفل`);
@@ -61,6 +75,14 @@ function paxLine(t: OfferDoc['travelers']): string {
 export function offerHtml(doc: OfferDoc): string {
   const m = (cents: number) => money(cents, doc.currency);
   const cheapest = Math.min(...doc.tiers.map((t) => t.price));
+  const gallery = (doc.gallery ?? []).filter(Boolean);
+  const hero = doc.heroImage ?? '';
+  const strip = gallery.length ? gallery : hero ? [hero] : [];
+  const tourPages = chunk(doc.tours, TOURS_PER_SHEET);
+
+  const footer = (label: string) =>
+    `<div class="foot"><span>${esc(brand.name)} · ${esc(brand.website)}</span>
+       <span class="ltr num">${esc(doc.serial)}</span><span>${esc(label)}</span></div>`;
 
   return `<!doctype html>
 <html lang="ar" dir="rtl">
@@ -71,347 +93,335 @@ export function offerHtml(doc: OfferDoc): string {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap">
 <style>
-  @page { size: A4; margin: 17mm 14mm 20mm; }
+  @page { size: A4; margin: 0; }
 
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
     font-family: "IBM Plex Sans Arabic", "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif;
     font-size: 10.5pt;
-    line-height: 1.65;
+    line-height: 1.6;
     color: ${palette.ink};
     background: #fff;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  /* العربية متصلة الحروف: أي letter-spacing يفكّ الوصل ويشوّه الكلمة.
-     التباعد مسموح على الأرقام والحروف اللاتينية فقط. */
+  /* العربية متصلة الحروف: أي letter-spacing يفكّ الوصل. لا يُستعمل على نص عربي. */
   .ltr { direction: ltr; unicode-bidi: isolate; }
   .num { font-variant-numeric: tabular-nums; }
 
-  /* ---------------- الغلاف ---------------- */
-  .cover {
-    height: 250mm;
-    display: flex;
-    flex-direction: column;
+  .sheet {
+    width: 210mm; height: 297mm;
     page-break-after: always;
-    border: 0.6mm solid ${palette.pine};
-    padding: 10mm;
-    position: relative;
+    position: relative; overflow: hidden;
+    background: #fff;
   }
-  .cover::after {
-    content: "";
-    position: absolute;
-    inset: 2.2mm;
-    border: 0.2mm solid ${palette.line};
-    pointer-events: none;
-  }
-  .masthead {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8mm;
-    padding-bottom: 6mm;
-    border-bottom: 0.3mm solid ${palette.line};
-  }
-  .masthead img { width: 22mm; height: 22mm; object-fit: contain; }
-  .ident { text-align: right; }
-  .ident h1 {
-    font-family: "Amiri", "Times New Roman", serif;
-    font-size: 20pt;
-    font-weight: 700;
-    color: ${palette.pine};
-    margin: 0 0 1mm;
-    line-height: 1.2;
-  }
-  .ident p { margin: 0; font-size: 9pt; color: ${palette.muted}; }
+  .sheet:last-child { page-break-after: auto; }
+  .pad { position: relative; height: 100%; padding: 18mm 16mm 12mm; display: flex; flex-direction: column; }
 
-  .cover-mid { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; }
-  .eyebrow {
-    font-size: 9pt;
-    color: ${palette.copper};
-    margin: 0 0 5mm;
+  .foot {
+    margin-top: auto; padding-top: 5mm;
+    border-top: 0.2mm solid ${palette.lineSoft};
+    display: flex; justify-content: space-between; gap: 4mm;
+    font-size: 7.5pt; color: ${palette.muted};
   }
+
+  /* ---------------- الغلاف ---------------- */
+  .cover { color: #fff; }
+  .cover img.bleed {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  .cover .scrim {
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(to top, rgba(16,24,21,.95) 0%, rgba(16,24,21,.72) 34%,
+                      rgba(16,24,21,.30) 62%, rgba(16,24,21,.55) 100%);
+  }
+  .cover .pad { padding: 16mm 16mm 14mm; }
+
+  .cover-top { display: flex; align-items: center; gap: 5mm; }
+  .cover-top img { width: 17mm; height: 17mm; object-fit: contain; }
+  .cover-top h1 {
+    font-family: "Amiri", serif; font-size: 17pt; font-weight: 700;
+    margin: 0; line-height: 1.25; color: #fff;
+  }
+  .cover-top p { margin: 0; font-size: 8.5pt; color: rgba(255,255,255,.72); }
+
+  .cover-mid { margin-top: auto; }
+  .eyebrow { font-size: 9.5pt; color: #E9B183; margin: 0 0 3mm; }
   .cover-mid h2 {
-    font-family: "Amiri", serif;
-    font-size: 40pt;
-    font-weight: 700;
-    color: ${palette.pine};
-    margin: 0 0 3mm;
-    line-height: 1.15;
+    font-family: "Amiri", serif; font-weight: 700;
+    font-size: 46pt; line-height: 1.08; margin: 0 0 3mm; color: #fff;
+    text-shadow: 0 1mm 4mm rgba(0,0,0,.35);
   }
-  .duration { font-size: 13pt; color: ${palette.teal}; margin: 0 0 9mm; }
-  .rule { width: 34mm; height: 0.5mm; background: ${palette.copper}; margin: 0 auto 9mm; }
-
-  .from-price { margin: 0; }
-  .from-price span { display: block; font-size: 9pt; color: ${palette.muted}; }
-  .from-price strong {
-    display: block;
-    font-family: "Amiri", serif;
-    font-size: 34pt;
-    color: ${palette.copper};
-    line-height: 1.2;
-    font-variant-numeric: tabular-nums;
+  .cover-mid .duration { font-size: 13pt; color: rgba(255,255,255,.86); margin: 0 0 7mm; }
+  .cover-rule { width: 30mm; height: 0.6mm; background: #E9B183; margin-bottom: 7mm; }
+  .cover-price { display: flex; align-items: baseline; gap: 4mm; margin: 0 0 10mm; }
+  .cover-price span { font-size: 9.5pt; color: rgba(255,255,255,.75); }
+  .cover-price strong {
+    font-family: "Amiri", serif; font-size: 38pt; color: #E9B183;
+    line-height: 1; font-variant-numeric: tabular-nums;
   }
 
-  .cover-foot {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 4mm;
-    border-top: 0.3mm solid ${palette.line};
-    padding-top: 6mm;
+  .cover-bar {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    border-top: 0.2mm solid rgba(255,255,255,.28);
+    padding-top: 5mm;
   }
-  .fact { text-align: center; }
-  .fact span { display: block; font-size: 8pt; color: ${palette.muted}; margin-bottom: 1mm; }
-  .fact strong { font-size: 11pt; font-weight: 600; color: ${palette.pine}; }
+  .cover-bar div { text-align: center; }
+  .cover-bar div + div { border-inline-start: 0.2mm solid rgba(255,255,255,.2); }
+  .cover-bar span { display: block; font-size: 8pt; color: rgba(255,255,255,.6); margin-bottom: .8mm; }
+  .cover-bar strong { font-size: 10.5pt; font-weight: 600; color: #fff; }
+
+  /* ---------------- شريط الصور ---------------- */
+  .strip { display: grid; gap: 2mm; margin-bottom: 8mm; }
+  .strip.one   { grid-template-columns: 1fr; }
+  .strip.two   { grid-template-columns: 1fr 1fr; }
+  .strip.three { grid-template-columns: 1.6fr 1fr 1fr; }
+  .strip img { width: 100%; height: 52mm; object-fit: cover; display: block; }
+  .strip.one img { height: 60mm; }
 
   /* ---------------- الأقسام ---------------- */
-  section { page-break-inside: auto; }
-  section + section { margin-top: 10mm; }
-  .break { page-break-before: always; }
+  h3.sec { font-family: "Amiri", serif; font-size: 20pt; font-weight: 700; color: ${palette.pine}; margin: 0 0 1.5mm; }
+  .sec-note { font-size: 9pt; color: ${palette.muted}; margin: 0 0 4mm; }
+  .sec-rule { height: 0.5mm; background: ${palette.copper}; width: 16mm; margin: 0 0 6mm; }
 
-  h3.sec {
-    font-family: "Amiri", serif;
-    font-size: 19pt;
-    font-weight: 700;
-    color: ${palette.pine};
-    margin: 0 0 1.5mm;
-  }
-  .sec-note { font-size: 9pt; color: ${palette.muted}; margin: 0 0 5mm; }
-  .sec-rule { height: 0.4mm; background: ${palette.teal}; width: 18mm; margin: 0 0 6mm; }
-
-  /* الجولات */
   ol.tours { list-style: none; margin: 0; padding: 0; counter-reset: t; }
   ol.tours li {
     counter-increment: t;
-    display: grid;
-    grid-template-columns: 9mm 1fr;
-    gap: 3mm;
-    align-items: start;
-    padding: 2.6mm 0;
-    border-bottom: 0.2mm solid ${palette.lineSoft};
-    page-break-inside: avoid;
+    display: grid; grid-template-columns: 8mm 1fr; gap: 3mm; align-items: center;
+    padding: 2.4mm 0; border-bottom: 0.2mm solid ${palette.lineSoft};
   }
   ol.tours li:last-child { border-bottom: 0; }
   ol.tours li::before {
     content: counter(t);
-    font-variant-numeric: tabular-nums;
-    color: ${palette.copper};
-    font-weight: 600;
-    font-size: 10pt;
-    text-align: center;
-    border: 0.25mm solid ${palette.line};
-    border-radius: 50%;
-    width: 7mm; height: 7mm;
-    line-height: 6.6mm;
+    font-variant-numeric: tabular-nums; color: ${palette.copper}; font-weight: 600;
+    font-size: 9.5pt; text-align: center;
+    border: 0.25mm solid ${palette.copper}; border-radius: 50%;
+    width: 6.5mm; height: 6.5mm; line-height: 6.1mm;
   }
-  ol.tours li span { padding-top: .6mm; }
 
-  /* الخيارات الثلاثة */
+  /* يملأ ما تبقّى من الصفحة بصورة بدل أن يُترك بياضاً ميتاً.
+     flex:1 مع min-height:0 يعني: خذ الفائض فقط، واختفِ إن لم يوجد فائض. */
+  .filler { flex: 1; min-height: 0; position: relative; overflow: hidden; margin: 7mm 0 0; }
+  .filler img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .filler .cap {
+    position: absolute; inset-inline-start: 0; bottom: 0; right: 0;
+    background: linear-gradient(to top, rgba(16,24,21,.82), transparent);
+    color: #fff; padding: 6mm 6mm 4mm; font-size: 10pt;
+  }
+
+  .details { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; margin-top: 6mm; }
+  .details div { background: ${palette.paper}; border-inline-start: 0.7mm solid ${palette.teal}; padding: 3mm 4mm; }
+  .details span { display: block; font-size: 8pt; color: ${palette.muted}; }
+  .details strong { font-size: 10pt; color: ${palette.pine}; font-weight: 600; }
+
+  /* ---------------- الخيارات ---------------- */
   .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; }
-  .tier {
-    border: 0.25mm solid ${palette.line};
-    padding: 5mm 4mm;
-    page-break-inside: avoid;
-    display: flex;
-    flex-direction: column;
-  }
-  .tier.rec { border: 0.5mm solid ${palette.teal}; background: ${palette.tealSoft}; }
-  .tier h4 { margin: 0 0 1mm; font-size: 12pt; font-weight: 700; color: ${palette.pine}; }
-  .tier .badge {
-    display: inline-block;
-    font-size: 8pt;
-    color: ${palette.teal};
-    margin-bottom: 2mm;
-  }
+  .tier { border: 0.25mm solid ${palette.line}; padding: 6mm 4.5mm; display: flex; flex-direction: column; }
+  .tier.rec { border: 0.6mm solid ${palette.teal}; background: ${palette.tealSoft}; }
+  .tier h4 { margin: 0 0 .8mm; font-size: 13pt; font-weight: 700; color: ${palette.pine}; }
+  .tier .badge { display: block; font-size: 8pt; color: ${palette.teal}; margin-bottom: 2mm; }
+  .tier .hotel { font-size: 9.5pt; color: ${palette.ink2}; margin: 0 0 .6mm; font-weight: 600; }
+  .tier .stars { color: ${palette.gold}; font-size: 9pt; margin-bottom: 3mm; }
   .tier .price {
-    font-family: "Amiri", serif;
-    font-size: 20pt;
-    color: ${palette.copper};
-    line-height: 1.25;
-    font-variant-numeric: tabular-nums;
-    margin: 1mm 0 0;
+    font-family: "Amiri", serif; font-size: 22pt; color: ${palette.copper};
+    line-height: 1.2; font-variant-numeric: tabular-nums; margin: auto 0 0;
   }
-  .tier .per { font-size: 8.5pt; color: ${palette.muted}; margin: 0 0 3mm; font-variant-numeric: tabular-nums; }
-  .tier .hotel { font-size: 9.5pt; color: ${palette.ink2}; margin: 0 0 1mm; font-weight: 600; }
-  .tier .stars { color: ${palette.gold}; font-size: 9pt; margin-bottom: 2.5mm; }
+  .tier .per { font-size: 8.5pt; color: ${palette.muted}; margin: 0 0 3.5mm; font-variant-numeric: tabular-nums; }
   .tier ul { margin: 0; padding-inline-start: 4mm; font-size: 9pt; color: ${palette.ink2}; }
   .tier ul li { margin-bottom: 1mm; }
 
-  /* يشمل / لا يشمل */
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
-  .box { border: 0.25mm solid ${palette.line}; padding: 4mm 5mm; page-break-inside: avoid; }
-  .box.inc { border-inline-start: 0.9mm solid ${palette.teal}; }
-  .box.exc { border-inline-start: 0.9mm solid ${palette.copper}; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; margin-top: 8mm; }
+  .box { border: 0.25mm solid ${palette.line}; padding: 4mm 5mm; }
+  .box.inc { border-inline-start: 1mm solid ${palette.teal}; }
+  .box.exc { border-inline-start: 1mm solid ${palette.copper}; }
   .box h4 { margin: 0 0 2.5mm; font-size: 11pt; color: ${palette.pine}; }
   .box ul { margin: 0; padding-inline-start: 4.5mm; font-size: 9.5pt; }
   .box li { margin-bottom: 1.2mm; }
 
-  /* العربون والشروط */
+  /* ---------------- الشروط والتواصل ---------------- */
   .deposit {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6mm;
-    background: ${palette.pine};
-    color: #EFF3F0;
-    padding: 5mm 6mm;
-    margin-top: 8mm;
-    page-break-inside: avoid;
+    display: flex; align-items: center; justify-content: space-between; gap: 6mm;
+    background: ${palette.pine}; color: #EFF3F0; padding: 6mm 7mm; margin-bottom: 7mm;
   }
-  .deposit span { font-size: 10pt; }
+  .deposit span { font-size: 10.5pt; }
   .deposit strong {
-    font-family: "Amiri", serif;
-    font-size: 20pt;
-    font-variant-numeric: tabular-nums;
-    color: #E9B183;
+    font-family: "Amiri", serif; font-size: 24pt; color: #E9B183;
+    font-variant-numeric: tabular-nums; line-height: 1;
   }
-  ul.terms { margin: 5mm 0 0; padding-inline-start: 5mm; font-size: 9.5pt; color: ${palette.ink2}; }
-  ul.terms li { margin-bottom: 1.4mm; }
+  ul.terms { margin: 0; padding-inline-start: 5mm; font-size: 9.5pt; color: ${palette.ink2}; }
+  ul.terms li { margin-bottom: 1.6mm; }
 
-  .contact {
-    margin-top: 9mm;
-    border-top: 0.4mm solid ${palette.line};
-    padding-top: 5mm;
-    text-align: center;
-    page-break-inside: avoid;
+  /* يأخذ ما تبقّى من الصفحة مثل .filler — لا بياض ميت أسفل الشروط. */
+  .cta {
+    margin-top: 8mm; position: relative; overflow: hidden;
+    flex: 1; min-height: 78mm;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center; color: #fff;
   }
-  .contact p { margin: 0 0 1.5mm; font-size: 10pt; color: ${palette.ink2}; }
-  .contact .wa {
-    font-size: 14pt;
-    font-weight: 600;
-    color: ${palette.teal};
-    direction: ltr;
-    unicode-bidi: isolate;
-    font-variant-numeric: tabular-nums;
+  .cta img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .cta .scrim { position: absolute; inset: 0; background: rgba(16,24,21,.74); }
+  .cta .inner { position: relative; }
+  .cta p { margin: 0 0 2mm; font-size: 11pt; color: rgba(255,255,255,.85); }
+  .cta .wa {
+    font-family: "Amiri", serif; font-size: 26pt; font-weight: 700; color: #E9B183;
+    direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; line-height: 1.3;
   }
-  .contact small { color: ${palette.muted}; font-size: 8.5pt; }
+  .cta small { display: block; margin-top: 2mm; font-size: 9pt; color: rgba(255,255,255,.7); }
 </style>
 </head>
 <body>
 
-<div class="cover">
-  <div class="masthead">
-    <div class="ident">
-      <h1>${esc(brand.name)}</h1>
-      <p>${esc(brand.tagline)}</p>
+<!-- ============ 1 · الغلاف ============ -->
+<div class="sheet cover">
+  ${hero ? `<img class="bleed" src="${esc(hero)}" alt="">` : ''}
+  <div class="scrim"></div>
+  <div class="pad">
+    <div class="cover-top">
+      <img src="${esc(brand.logoUrl)}" alt="">
+      <div>
+        <h1>${esc(brand.name)}</h1>
+        <p>${esc(brand.tagline)}</p>
+      </div>
     </div>
-    <img src="${esc(brand.logoUrl)}" alt="">
-  </div>
 
-  <div class="cover-mid">
-    <p class="eyebrow">عرض سعر</p>
-    <h2>${esc(doc.destinationName)}</h2>
-    <p class="duration num">${doc.days} أيام / ${doc.nights} ليالٍ</p>
-    <div class="rule"></div>
-    <p class="from-price">
-      <span>تبدأ الأسعار من</span>
-      <strong>${esc(m(cheapest))}</strong>
-    </p>
-  </div>
-
-  <div class="cover-foot">
-    <div class="fact"><span>رقم العرض</span><strong class="ltr num">${esc(doc.serial)}</strong></div>
-    <div class="fact"><span>المسافرون</span><strong>${esc(paxLine(doc.travelers))}</strong></div>
-    <div class="fact"><span>تاريخ الإصدار</span><strong class="ltr num">${esc(doc.issueDate)}</strong></div>
+    <div class="cover-mid">
+      <p class="eyebrow">عرض سعر خاص</p>
+      <h2>${esc(doc.destinationName)}</h2>
+      <p class="duration num">${doc.days} أيام / ${doc.nights} ليالٍ</p>
+      <div class="cover-rule"></div>
+      <p class="cover-price"><span>تبدأ من</span><strong>${esc(m(cheapest))}</strong></p>
+      <div class="cover-bar">
+        <div><span>رقم العرض</span><strong class="ltr num">${esc(doc.serial)}</strong></div>
+        <div><span>المسافرون</span><strong>${esc(paxLine(doc.travelers))}</strong></div>
+        <div><span>تاريخ الإصدار</span><strong class="ltr num">${esc(doc.issueDate)}</strong></div>
+      </div>
+    </div>
   </div>
 </div>
 
+<!-- ============ 2 · البرنامج ============ -->
 ${
-  doc.customerName || doc.travelMonth
-    ? `<section>
-  <h3 class="sec">بيانات العرض</h3>
-  <div class="sec-rule"></div>
-  <div class="two">
-    ${doc.customerName ? `<div class="box"><h4>الزبون</h4><p style="margin:0">${esc(doc.customerName)}</p></div>` : ''}
-    ${doc.travelMonth ? `<div class="box"><h4>موعد السفر</h4><p style="margin:0" class="ltr num">${esc(doc.travelMonth)}</p></div>` : ''}
+  tourPages.length
+    ? tourPages
+        .map(
+          (page, idx) => `<div class="sheet">
+  <div class="pad">
+    ${
+      idx === 0 && strip.length
+        ? `<div class="strip ${strip.length >= 3 ? 'three' : strip.length === 2 ? 'two' : 'one'}">
+      ${strip.slice(0, 3).map((u) => `<img src="${esc(u)}" alt="">`).join('\n      ')}
+    </div>`
+        : ''
+    }
+    <h3 class="sec">البرنامج والجولات${tourPages.length > 1 ? ` (${idx + 1}/${tourPages.length})` : ''}</h3>
+    <p class="sec-note">جميع الجولات بسيارة خاصة مع سائق، وتُرتَّب حسب الطقس وأوقات الوصول.</p>
+    <div class="sec-rule"></div>
+    <ol class="tours" style="counter-reset: t ${idx * TOURS_PER_SHEET}">
+      ${page.map((t) => `<li><span>${esc(t)}</span></li>`).join('\n      ')}
+    </ol>
+    ${
+      idx === tourPages.length - 1 && (hero || strip[0])
+        ? `<div class="filler">
+      <img src="${esc(hero || strip[0]!)}" alt="">
+      <div class="cap">${esc(doc.destinationName)} — ${doc.days} أيام بضيافة عربية</div>
+    </div>`
+        : ''
+    }
+    ${
+      idx === tourPages.length - 1
+        ? `<div class="details">
+      <div><span>عدد الغرف</span><strong class="num">${doc.travelers.rooms}</strong></div>
+      <div><span>موعد السفر</span><strong class="ltr num">${esc(doc.travelMonth ?? 'حسب اختياركم')}</strong></div>
+      <div><span>الزبون</span><strong>${esc(doc.customerName ?? '—')}</strong></div>
+    </div>`
+        : ''
+    }
+    ${footer('البرنامج')}
   </div>
-</section>`
+</div>`,
+        )
+        .join('\n')
     : ''
 }
 
-${
-  doc.tours.length
-    ? `<section${doc.customerName || doc.travelMonth ? '' : ''}>
-  <h3 class="sec">البرنامج والجولات</h3>
-  <p class="sec-note">جميع الجولات بسيارة خاصة مع سائق، وتُرتَّب حسب الطقس وأوقات الوصول.</p>
-  <div class="sec-rule"></div>
-  <ol class="tours">
-    ${doc.tours.map((t) => `<li><span>${esc(t)}</span></li>`).join('\n    ')}
-  </ol>
-</section>`
-    : ''
-}
-
-<section class="break">
-  <h3 class="sec">ثلاثة خيارات</h3>
-  <p class="sec-note">نفس البرنامج ونفس الجولات — الفرق في فئة الفندق والسيارة والخدمات.</p>
-  <div class="sec-rule"></div>
-  <div class="tiers">
-    ${doc.tiers
-      .map(
-        (t) => `<div class="tier${t.recommended ? ' rec' : ''}">
-      <h4>${esc(t.label)}</h4>
-      ${t.recommended ? '<span class="badge">الأكثر طلباً</span>' : ''}
-      ${t.hotelName ? `<p class="hotel">${esc(t.hotelName)}</p>` : ''}
-      ${t.hotelClass && STARS[t.hotelClass] ? `<div class="stars">${STARS[t.hotelClass]}</div>` : ''}
-      <p class="price">${esc(m(t.price))}</p>
-      <p class="per">${esc(m(t.perAdult))} للبالغ الواحد</p>
-      ${t.extras.length ? `<ul>${t.extras.map((e) => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}
-    </div>`,
-      )
-      .join('\n    ')}
-  </div>
-</section>
-
-<section>
-  <h3 class="sec">ما يشمله العرض</h3>
-  <div class="sec-rule"></div>
-  <div class="two">
-    <div class="box inc">
-      <h4>يشمل</h4>
-      <ul>${doc.includes.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>
+<!-- ============ 3 · الخيارات ============ -->
+<div class="sheet">
+  <div class="pad">
+    <h3 class="sec">ثلاثة خيارات</h3>
+    <p class="sec-note">نفس البرنامج ونفس الجولات — الفرق في فئة الفندق والسيارة والخدمات.</p>
+    <div class="sec-rule"></div>
+    <div class="tiers">
+      ${doc.tiers
+        .map(
+          (t) => `<div class="tier${t.recommended ? ' rec' : ''}">
+        <h4>${esc(t.label)}</h4>
+        ${t.recommended ? '<span class="badge">الأكثر طلباً</span>' : ''}
+        ${t.hotelName ? `<p class="hotel">${esc(t.hotelName)}</p>` : ''}
+        ${t.hotelClass && STARS[t.hotelClass] ? `<div class="stars">${STARS[t.hotelClass]}</div>` : ''}
+        ${t.extras.length ? `<ul>${t.extras.map((e) => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}
+        <p class="price">${esc(m(t.price))}</p>
+        <p class="per">${esc(m(t.perAdult))} للبالغ الواحد</p>
+      </div>`,
+        )
+        .join('\n      ')}
     </div>
-    <div class="box exc">
-      <h4>لا يشمل</h4>
-      <ul>${doc.excludes.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>
+
+    <div class="two">
+      <div class="box inc">
+        <h4>يشمل</h4>
+        <ul>${doc.includes.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>
+      </div>
+      <div class="box exc">
+        <h4>لا يشمل</h4>
+        <ul>${doc.excludes.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>
+      </div>
     </div>
+    ${footer('الخيارات')}
   </div>
+</div>
 
-  <div class="deposit">
-    <span>لتثبيت الحجز — عربون ${doc.depositPct}٪</span>
-    <strong>${esc(m(doc.depositAmount))}</strong>
+<!-- ============ 4 · الشروط والتواصل ============ -->
+<div class="sheet">
+  <div class="pad">
+    <h3 class="sec">الحجز والشروط</h3>
+    <div class="sec-rule"></div>
+
+    <div class="deposit">
+      <span>لتثبيت الحجز — عربون ${doc.depositPct}٪</span>
+      <strong>${esc(m(doc.depositAmount))}</strong>
+    </div>
+
+    <ul class="terms">
+      <li>الأسعار صالحة ${doc.validDays} أيام من تاريخ الإصدار وتخضع لتوفر الغرف وقت التأكيد.</li>
+      <li>الإلغاء مجاني قبل 14 يوماً من موعد السفر، وبعدها يُخصم العربون.</li>
+      <li>الأسعار لعدد المسافرين المذكور في هذا العرض، وأي تغيير يستوجب إعادة التسعير.</li>
+      <li>ترتيب الجولات قابل للتبديل حسب الطقس وأوقات الرحلات دون نقصان في عددها.</li>
+      <li>الفنادق المذكورة أو ما يعادلها في الفئة نفسها عند عدم التوفر.</li>
+      <li>الأسعار لا تشمل تذاكر الطيران ولا التأمين ما لم يُذكر خلاف ذلك.</li>
+    </ul>
+
+    <div class="cta">
+      ${strip.at(-1) ? `<img src="${esc(strip.at(-1)!)}" alt="">` : ''}
+      <div class="scrim"></div>
+      <div class="inner">
+        <p>لتأكيد الحجز أو تعديل البرنامج، راسلنا مباشرة</p>
+        <div class="wa">${esc(whatsappDisplay())}</div>
+        <small>
+          ${esc(brand.website)}${brand.email ? ` · ${esc(brand.email)}` : ''}${brand.instagram ? ` · @${esc(brand.instagram)}` : ''}
+          ${brand.legalName ? `<br>${esc(brand.legalName)}` : ''}
+          ${brand.address ? `<br>${esc(brand.address)}` : ''}
+          ${brand.license ? `<br>رخصة رقم ${esc(brand.license)}` : ''}
+        </small>
+      </div>
+    </div>
+    ${footer('الشروط')}
   </div>
-
-  <ul class="terms">
-    <li>الأسعار صالحة ${doc.validDays} أيام من تاريخ الإصدار وتخضع لتوفر الغرف وقت التأكيد.</li>
-    <li>الإلغاء مجاني قبل 14 يوماً من موعد السفر، وبعدها يُخصم العربون.</li>
-    <li>الأسعار لعدد المسافرين المذكور أعلاه، وأي تغيير يستوجب إعادة التسعير.</li>
-    <li>ترتيب الجولات قابل للتبديل حسب الطقس وأوقات الرحلات دون نقصان في عددها.</li>
-    <li>الفنادق المذكورة أو ما يعادلها في الفئة نفسها عند عدم التوفر.</li>
-  </ul>
-
-  <div class="contact">
-    <p>لتأكيد الحجز أو تعديل البرنامج، راسلنا مباشرة</p>
-    <p class="wa">${esc(whatsappDisplay())}</p>
-    <small>
-      ${esc(brand.website)}${brand.email ? ` · ${esc(brand.email)}` : ''}${brand.instagram ? ` · @${esc(brand.instagram)}` : ''}
-      ${brand.address ? `<br>${esc(brand.address)}` : ''}
-      ${brand.license ? `<br>رخصة رقم ${esc(brand.license)}` : ''}
-    </small>
-  </div>
-</section>
+</div>
 
 </body>
 </html>`;
-}
-
-/** تذييل يتكرر في كل صفحة — يمرَّر لـ Puppeteer لا لـ CSS. */
-export function offerFooter(doc: OfferDoc): string {
-  return `<div style="width:100%;font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;
-    font-size:7pt;color:${palette.muted};padding:0 14mm;display:flex;
-    justify-content:space-between;direction:rtl">
-    <span>${esc(brand.name)} · ${esc(brand.website)}</span>
-    <span style="direction:ltr">${esc(doc.serial)} — <span class="pageNumber"></span>/<span class="totalPages"></span></span>
-  </div>`;
 }

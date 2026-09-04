@@ -39,6 +39,8 @@ export interface OfferDocInput {
   customerName?: string;
   hasTickets: boolean;
   validDays?: number;
+  heroImage?: string;
+  gallery?: string[];
 }
 
 export function toOfferDoc(i: OfferDocInput): OfferDoc {
@@ -82,6 +84,8 @@ export function toOfferDoc(i: OfferDocInput): OfferDoc {
     depositAmount: chosen.deposit,
     validDays: i.validDays ?? 7,
     currency: i.currency,
+    heroImage: i.heroImage,
+    gallery: i.gallery,
   };
 }
 
@@ -94,5 +98,6 @@ export function toCardDoc(doc: OfferDoc): CardDoc {
     fromPrice: Math.min(...doc.tiers.map((t) => t.price)),
     currency: doc.currency,
     highlights: doc.tours.length ? doc.tours : doc.includes,
+    heroImage: doc.heroImage,
   };
 }

@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { threeTiers, money, type QuoteInput, type Tier, type TierRates } from './pricing.ts';
 import { toOfferDoc, toCardDoc } from './offerdoc.ts';
-import { offerHtml, offerFooter } from './templates/offer.ts';
+import { offerHtml } from './templates/offer.ts';
 import { cardHtml, CARD_DIMENSIONS } from './templates/card.ts';
 import { findBrowser, renderPdf, renderPng, closeBrowser } from './render.ts';
 
@@ -44,6 +44,11 @@ const doc = toOfferDoc({
   travelMonth: '2026-07',
   customerName: 'أبو محمد',
   hasTickets: true,
+  heroImage: 'https://alarabtravelers.com/wp-content/uploads/2022/06/hero.jpg',
+  gallery: [
+    'https://alarabtravelers.com/wp-content/uploads/2022/06/a.jpg',
+    'https://alarabtravelers.com/wp-content/uploads/2019/09/b.jpg',
+  ],
 });
 
 test('المستند لا يحمل أي حقل مالي داخلي', () => {
@@ -90,6 +95,18 @@ test('كل نص من المستخدم مهروب قبل أن يدخل الصفح
   assert.ok(html.includes('&lt;script&gt;'), 'الهروب لم يحدث');
 });
 
+test('الصور تصل إلى المستند والبطاقة', () => {
+  const html = offerHtml(doc);
+  assert.ok(html.includes('hero.jpg'), 'صورة الغلاف غائبة عن المستند');
+  assert.ok(html.includes('/a.jpg') && html.includes('/b.jpg'), 'شريط الصور غائب');
+  const card = cardHtml(toCardDoc(doc), 'square');
+  assert.ok(card.includes('hero.jpg'), 'خلفية البطاقة غائبة');
+  // بلا صور يجب أن يبقى المستند صالحاً لا مكسوراً
+  const bare = offerHtml({ ...doc, heroImage: undefined, gallery: [] });
+  assert.ok(!bare.includes('<img class="bleed"'), 'وسم صورة فارغ بلا مصدر');
+  assert.ok(bare.includes('ثلاثة خيارات'), 'المستند انكسر بلا صور');
+});
+
 test('بطاقة الصورة تأخذ أرخص سعر ومقاسها صحيح', () => {
   const card = toCardDoc(doc);
   assert.equal(card.fromPrice, Math.min(...offers.map((o) => o.sell)));
@@ -112,7 +129,7 @@ try {
 
 test('توليد PDF حقيقي', { skip: hasBrowser ? false : 'لا يوجد متصفح على هذا الجهاز' }, async (t) => {
   t.after(closeBrowser);
-  const pdf = await renderPdf(offerHtml(doc), offerFooter(doc));
+  const pdf = await renderPdf(offerHtml(doc));
   const head = Buffer.from(pdf.slice(0, 5)).toString('latin1');
   assert.equal(head, '%PDF-', 'المخرج ليس ملف PDF');
   assert.ok(pdf.byteLength > 20_000, `الملف صغير على نحو مريب: ${pdf.byteLength} بايت`);

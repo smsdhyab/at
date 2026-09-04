@@ -35,6 +35,19 @@ export interface Destination {
   transfer_rate: number;
   ticket_pp: number;
   guide_rate: number;
+  hero_image: string;
+  /** مصفوفة JSON من روابط الصور — تُفكّ بـ `galleryOf`. */
+  gallery: string;
+}
+
+/** يفكّ عمود gallery بأمان: عمود تالف لا يجب أن يمنع توليد عرض. */
+export function galleryOf(d: Pick<Destination, 'gallery'>): string[] {
+  try {
+    const parsed: unknown = JSON.parse(d.gallery || '[]');
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 export interface Hotel {
@@ -80,13 +93,14 @@ export interface QuoteRow {
 
 export const listDestinations = () =>
   all<Destination>(
-    `select slug, name, transfer_rate, ticket_pp, guide_rate
+    `select slug, name, transfer_rate, ticket_pp, guide_rate, hero_image, gallery
      from destinations where active = 1 order by sort_order, name`,
   );
 
 export const getDestination = (slug: string) =>
   one<Destination>(
-    `select slug, name, transfer_rate, ticket_pp, guide_rate from destinations where slug = ?`,
+    `select slug, name, transfer_rate, ticket_pp, guide_rate, hero_image, gallery
+     from destinations where slug = ?`,
     slug,
   );
 
@@ -166,6 +180,43 @@ export const setTourPrice = (id: number, cents: number) =>
   run(`update tours set price = ? where id = ?`, cents, id);
 
 export const deactivateTour = (id: number) => run(`update tours set active = 0 where id = ?`, id);
+
+/* ---------------------------- المستخدمون ---------------------------- */
+
+export interface User {
+  telegram_id: number;
+  name: string | null;
+  username: string | null;
+  role: string;
+  created_at: string;
+}
+
+export const getUser = (id: number) =>
+  one<User>(`select telegram_id, name, username, role, created_at from users where telegram_id = ?`, id);
+
+export const listUsers = () =>
+  all<User>(`select telegram_id, name, username, role, created_at from users order by created_at`);
+
+export const addUser = (id: number, name: string | null, username: string | null) =>
+  run(
+    `insert into users (telegram_id, name, username) values (?, ?, ?)
+     on conflict(telegram_id) do update set name = excluded.name, username = excluded.username`,
+    id, name, username,
+  );
+
+export const setUserRole = (id: number, role: 'admin' | 'blocked') =>
+  run(`update users set role = ? where telegram_id = ?`, role, id);
+
+/* ----------------------------- الإعدادات ----------------------------- */
+
+export const getSetting = (key: string, fallback = ''): string =>
+  one<{ value: string }>(`select value from settings where key = ?`, key)?.value ?? fallback;
+
+export const setSetting = (key: string, value: string) =>
+  run(`insert into settings (key, value) values (?, ?)
+       on conflict(key) do update set value = excluded.value`, key, value);
+
+export const isOpenAccess = () => getSetting('open_access', '1') === '1';
 
 /* ------------------------------- العروض ------------------------------- */
 

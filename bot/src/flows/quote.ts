@@ -19,7 +19,7 @@ import * as db from '../db.ts';
 import { expectText, newDraft, getDraft, dropDraft, type Draft } from '../state.ts';
 import { fmt, keyboard, tiersSummary, internalBreakdown, customerOffer, CURRENCY } from '../ui.ts';
 import { toOfferDoc, toCardDoc } from '../offerdoc.ts';
-import { offerHtml, offerFooter } from '../templates/offer.ts';
+import { offerHtml } from '../templates/offer.ts';
 import { cardHtml, CARD_DIMENSIONS, type CardSize } from '../templates/card.ts';
 import { renderPdf, renderPng } from '../render.ts';
 
@@ -139,6 +139,8 @@ interface Built {
   tourNames: string[];
   input: QuoteInput;
   hotelClasses: Partial<Record<Tier, string>>;
+  heroImage: string;
+  gallery: string[];
 }
 
 async function buildOffers(draft: Draft): Promise<Built | null> {
@@ -217,6 +219,8 @@ async function buildOffers(draft: Draft): Promise<Built | null> {
     offers: threeTiers(input, rates),
     tourNames: tours.map((t) => t.name),
     input,
+    heroImage: dest.hero_image,
+    gallery: db.galleryOf(dest),
     hotelClasses: {
       economy: (three ?? fallback).class,
       premium: (four ?? fallback).class,
@@ -351,7 +355,7 @@ export async function handleQuoteCallback(ctx: Context, parts: string[]): Promis
     try {
       const doc = buildDoc(draft, built);
       if (action === 'pdf') {
-        const pdf = await renderPdf(offerHtml(doc), offerFooter(doc));
+        const pdf = await renderPdf(offerHtml(doc));
         await ctx.replyWithDocument(new InputFile(pdf, `${doc.serial}.pdf`), {
           caption: `عرض ${doc.destinationName} — ${doc.days} أيام`,
         });
@@ -436,6 +440,8 @@ function buildDoc(draft: Draft, built: Built) {
     travelMonth: draft.travelMonth,
     customerName: draft.customerName,
     hasTickets: built.input.ticketPerPerson > 0,
+    heroImage: built.heroImage,
+    gallery: built.gallery,
   });
 }
 

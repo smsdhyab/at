@@ -23,6 +23,8 @@ export interface CardDoc {
   currency: string;
   highlights: string[];
   hotelClass?: string;
+  /** صورة الخلفية — من مكتبة صور الموقع. بدونها تبقى الخلفية لوناً ونقشاً. */
+  heroImage?: string;
 }
 
 const esc = (s: unknown): string =>
@@ -64,6 +66,17 @@ export function cardHtml(doc: CardDoc, size: CardSize = 'square'): string {
       repeating-linear-gradient(-45deg, rgba(255,255,255,.045) 0 2px, transparent 2px 46px);
     pointer-events: none;
   }
+  img.bg {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  .scrim {
+    position: absolute; inset: 0;
+    background: linear-gradient(to bottom,
+      rgba(16,24,21,.86) 0%, rgba(16,24,21,.62) 32%,
+      rgba(16,24,21,.72) 62%, rgba(16,24,21,.94) 100%);
+  }
   .frame {
     position: absolute;
     inset: ${tall ? 54 : 44}px;
@@ -103,6 +116,7 @@ export function cardHtml(doc: CardDoc, size: CardSize = 'square'): string {
     font-weight: 700;
     line-height: 1.1;
     text-wrap: balance;
+    text-shadow: 0 4px 24px rgba(0,0,0,.45);
   }
   .duration {
     font-size: ${tall ? 34 : 28}px;
@@ -146,6 +160,8 @@ export function cardHtml(doc: CardDoc, size: CardSize = 'square'): string {
 </style>
 </head>
 <body>
+${doc.heroImage ? `<img class="bg" src="${esc(doc.heroImage)}" alt="">` : ''}
+<div class="scrim"></div>
 <div class="frame"></div>
 <div class="wrap">
   <div class="brand">
