@@ -7,3 +7,5 @@ data/
 *.db-wal
 *.db-shm
 samples/
+*.local.md
+SECRETS.local.md

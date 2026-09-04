@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "grammy": "^1.30.0",
+    "postgres": "^3.4.9",
     "puppeteer-core": "^25.10.0"
   },
   "devDependencies": {
