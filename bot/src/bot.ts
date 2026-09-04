@@ -11,6 +11,7 @@
  */
 import { Bot, InlineKeyboard, Keyboard, type Context } from 'grammy';
 import * as db from './db.ts';
+import { runMigrations } from './migrate.ts';
 import { startQuote, handleQuoteCallback } from './flows/quote.ts';
 import { startRates, handleRatesCallback } from './flows/rates.ts';
 import { takeText, clearText, dropDraft } from './state.ts';
@@ -21,6 +22,11 @@ if (!token) {
   console.error('TELEGRAM_TOKEN غير موجود. انسخ .env.example إلى .env وضع التوكن فيه.');
   process.exit(1);
 }
+
+// الجداول تُنشأ عند الإقلاع: على قرص جديد لا توجد جداول، ونسيان الخطوة
+// يعني بوتاً يسقط عند أول ضغطة زر. آمن للتكرار.
+const fresh = await runMigrations();
+if (fresh) console.log(`جهّزت قاعدة البيانات — ${fresh} ملف جديد.`);
 
 /** معرّفات مسموحة من البيئة — تُضاف لقاعدة البيانات عند الإقلاع. */
 const seedIds = (process.env.ALLOWED_IDS ?? '')
