@@ -160,6 +160,7 @@ interface Built {
   hotelClasses: Partial<Record<Tier, string>>;
   heroImage: string;
   gallery: string[];
+  imageCredits: string;
 }
 
 function buildOffers(s: Session): Built | null {
@@ -224,6 +225,7 @@ function buildOffers(s: Session): Built | null {
     input,
     heroImage: dest.hero_image,
     gallery: db.galleryOf(dest),
+    imageCredits: dest.image_credits,
     hotelClasses: {
       economy: (three ?? fallback).class,
       premium: (four ?? fallback).class,
@@ -255,6 +257,7 @@ function buildDoc(s: Session, built: Built) {
     hasTickets: built.input.ticketPerPerson > 0,
     heroImage: built.heroImage,
     gallery: built.gallery,
+    imageCredits: built.imageCredits,
   });
 }
 

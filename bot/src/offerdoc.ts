@@ -41,6 +41,7 @@ export interface OfferDocInput {
   validDays?: number;
   heroImage?: string;
   gallery?: string[];
+  imageCredits?: string;
 }
 
 export function toOfferDoc(i: OfferDocInput): OfferDoc {
@@ -90,6 +91,7 @@ export function toOfferDoc(i: OfferDocInput): OfferDoc {
     currency: i.currency,
     heroImage: i.heroImage,
     gallery: i.gallery,
+    imageCredits: i.imageCredits,
   };
 }
 

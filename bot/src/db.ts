@@ -38,6 +38,8 @@ export interface Destination {
   hero_image: string;
   /** مصفوفة JSON من روابط الصور — تُفكّ بـ `galleryOf`. */
   gallery: string;
+  /** سطر مصدر الصور الخارجية — يوجبه ترخيص كومنز. فارغ إن كانت كل الصور لنا. */
+  image_credits: string;
 }
 
 /** يفكّ عمود gallery بأمان: عمود تالف لا يجب أن يمنع توليد عرض. */
@@ -93,13 +95,13 @@ export interface QuoteRow {
 
 export const listDestinations = () =>
   all<Destination>(
-    `select slug, name, transfer_rate, ticket_pp, guide_rate, hero_image, gallery
+    `select slug, name, transfer_rate, ticket_pp, guide_rate, hero_image, gallery, image_credits
      from destinations where active = 1 order by sort_order, name`,
   );
 
 export const getDestination = (slug: string) =>
   one<Destination>(
-    `select slug, name, transfer_rate, ticket_pp, guide_rate, hero_image, gallery
+    `select slug, name, transfer_rate, ticket_pp, guide_rate, hero_image, gallery, image_credits
      from destinations where slug = ?`,
     slug,
   );

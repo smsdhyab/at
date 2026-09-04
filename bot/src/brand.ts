@@ -21,21 +21,50 @@ export const brand = {
     'https://alarabtravelers.com/wp-content/uploads/2020/02/%D8%B4%D8%B9%D8%A7%D8%B1-%D9%85%D9%88%D9%82%D8%B9-%D8%A7%D9%84%D9%85%D8%B3%D8%A7%D9%81%D8%B1%D9%88%D9%86-%D8%A7%D9%84%D8%B9%D8%B1%D8%A8-192.png',
 } as const;
 
-/** ألوان الهوية — نفس ألوان خطة الإطلاق وصفحات الموقع الجديدة. */
+/**
+ * ألوان الهوية — لوحة مفرحة هادئة: تركوازي البحر، ورملي دافئ، وشمسي،
+ * على أرضية كريمية. استُبدلت اللوحة الداكنة السابقة بطلب المالك.
+ */
 export const palette = {
-  teal: '#0E6E6B',
-  pine: '#2C4A3E',
-  copper: '#A8632B',
-  gold: '#C9973F',
-  paper: '#F3F5F3',
+  sea: '#2E9DA8',
+  seaDeep: '#1D7580',
+  seaSoft: '#DFF1F3',
+  sand: '#D9834A',
+  sandSoft: '#FBEDE1',
+  sun: '#EFB94F',
+  mint: '#CFE9DC',
+  cream: '#FDFAF6',
   card: '#FFFFFF',
-  ink: '#141D1A',
-  ink2: '#3D4A46',
-  muted: '#69776F',
-  line: '#D3DAD6',
-  lineSoft: '#E4EAE7',
-  tealSoft: '#E7F1F0',
-  copperSoft: '#F7EDE2',
+  ink: '#2C464E',
+  ink2: '#55707A',
+  muted: '#8AA2A9',
+  line: '#DDEBEE',
+  lineSoft: '#EBF4F5',
+
+  // أسماء قديمة تُبقي بقية الكود يعمل بلا تعديل
+  teal: '#2E9DA8',
+  tealSoft: '#DFF1F3',
+  copper: '#D9834A',
+  copperSoft: '#FBEDE1',
+  pine: '#1D7580',
+  gold: '#EFB94F',
+  paper: '#FDFAF6',
+} as const;
+
+/**
+ * الخطوط. طلب المالك خط «قمرة» وهو تجاري من Indian Type Foundry وليس على
+ * Google Fonts، فلا يجوز تحميله من مواقع القرصنة. البديل المختار أقرب ما
+ * يكون لما طُلب: مفرح وهادئ ولطيف.
+ *
+ * إن توفّر ترخيص «قمرة»: ضع الملف في `assets/` وأضف @font-face واستبدل
+ * القيمة هنا — لا تعديل في أي مكان آخر.
+ */
+export const fonts = {
+  googleHref:
+    'https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600&display=swap',
+  // قمرة للعربية وحدها (انظر fontface.ts)، وReadex Pro تلتقط الأرقام واللاتيني
+  display: '"Qomra", "Readex Pro", "Segoe UI", Tahoma, sans-serif',
+  body: '"Qomra", "Readex Pro", "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif',
 } as const;
 
 /** رقم الواتساب بصيغة عرض: ‎+90 501 319 6750‎ */
