@@ -38,6 +38,10 @@ export interface Destination {
   hero_image: string;
   /** مصفوفة JSON من روابط الصور — تُفكّ بـ `galleryOf`. */
   gallery: string;
+  /** مسار المدن بالأوزان — يُفكّ بـ parseRoute. */
+  route: string;
+  /** معلومات عملية — تُفكّ بـ parsePractical. */
+  practical: string;
   /** سطر مصدر الصور الخارجية — يوجبه ترخيص كومنز. فارغ إن كانت كل الصور لنا. */
   image_credits: string;
 }
@@ -74,6 +78,8 @@ export interface TourRow {
   destination: string;
   name: string;
   price: number;
+  /** وصف يدخل نص اليوم في البرنامج اليومي. */
+  description: string;
 }
 
 export interface QuoteRow {
@@ -95,13 +101,13 @@ export interface QuoteRow {
 
 export const listDestinations = () =>
   all<Destination>(
-    `select slug, name, transfer_rate, ticket_pp, guide_rate, hero_image, gallery, image_credits
+    `select slug, name, transfer_rate, ticket_pp, guide_rate, hero_image, gallery, image_credits, route, practical
      from destinations where active = 1 order by sort_order, name`,
   );
 
 export const getDestination = (slug: string) =>
   one<Destination>(
-    `select slug, name, transfer_rate, ticket_pp, guide_rate, hero_image, gallery, image_credits
+    `select slug, name, transfer_rate, ticket_pp, guide_rate, hero_image, gallery, image_credits, route, practical
      from destinations where slug = ?`,
     slug,
   );
@@ -170,7 +176,7 @@ export const setCarRate = (id: number, cents: number) =>
 
 export const listTours = (destination: string) =>
   all<TourRow>(
-    `select id, destination, name, price
+    `select id, destination, name, price, description
      from tours where destination = ? and active = 1 order by sort_order, id`,
     destination,
   );

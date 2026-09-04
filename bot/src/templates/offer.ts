@@ -1,16 +1,17 @@
 /**
- * مستند عرض السعر — A4 عمودي RTL، مبني حول الصورة.
+ * مقترح الرحلة — A4 عمودي RTL، سبع صفحات.
  *
  * هذه **نسخة الزبون**. بنية `OfferDoc` لا تحتوي حقل تكلفة ولا ربح إطلاقاً —
  * ليس إخفاءً بل غياباً: ما لا يدخل الدالة لا يمكن أن يخرج منها.
  *
  * التقسيم صفحات صريحة (`.sheet`) بارتفاع A4 كامل و`@page{margin:0}`، لأن
  * الغلاف يحتاج صورة تملأ الورقة حتى حوافها — وهذا مستحيل مع هوامش `@page`.
- * ثمن ذلك أن الطول مسؤوليتنا: الجولات تُقسَّم على صفحات بـ `chunk` أدناه.
+ * ثمن ذلك أن الطول مسؤوليتنا: الأيام تُقسَّم على صفحات بـ `chunk` أدناه.
  */
 import { brand, palette, fonts, whatsappDisplay } from '../brand.ts';
 import { fontFaceCss } from '../fontface.ts';
 import { money } from '../pricing.ts';
+import type { Day, RouteNight, Practical } from '../itinerary.ts';
 
 export interface OfferTier {
   label: string;
@@ -43,12 +44,15 @@ export interface OfferDoc {
   depositAmount: number;
   validDays: number;
   currency: string;
-  /** صورة الغلاف — من مكتبة صور الموقع. */
   heroImage?: string;
-  /** صور إضافية للشريط. */
   gallery?: string[];
-  /** سطر مصدر الصور الخارجية — يوجبه ترخيص كومنز. */
   imageCredits?: string;
+  /** البرنامج اليومي. */
+  itinerary?: Day[];
+  /** المدن وتوزيع الليالي. */
+  route?: RouteNight[];
+  /** معلومات عملية عن الوجهة. */
+  practical?: Practical;
 }
 
 const esc = (s: unknown): string =>
@@ -60,13 +64,19 @@ const esc = (s: unknown): string =>
 
 const STARS: Record<string, string> = { '3': '★★★', '4': '★★★★', '5': '★★★★★' };
 
-/** أقصى عدد جولات في الصفحة الواحدة قبل أن تُفتح صفحة جديدة. */
-const TOURS_PER_SHEET = 9;
+/** أقصى عدد أيام في الصفحة الواحدة قبل أن تُفتح صفحة جديدة. */
+const DAYS_PER_SHEET = 5;
 
-function chunk<T>(items: T[], size: number): T[][] {
+/**
+ * يقسّم على صفحات متوازنة لا ممتلئة ثم شبه فارغة.
+ * سبعة أيام بحد أقصى خمسة تصير 4+3 لا 5+2 — صفحتان متوازنتان أفضل شكلاً.
+ */
+function chunk<T>(items: T[], max: number): T[][] {
   if (!items.length) return [];
+  const pages = Math.ceil(items.length / max);
+  const per = Math.ceil(items.length / pages);
   const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  for (let i = 0; i < items.length; i += per) out.push(items.slice(i, i + per));
   return out;
 }
 
@@ -77,17 +87,38 @@ function paxLine(t: OfferDoc['travelers']): string {
   return parts.join(' · ');
 }
 
+/** ما يميّزنا — قيم خدمة لا أرقام مخترعة عن الشركة. */
+const PROMISES: ReadonlyArray<readonly [string, string]> = [
+  ['ضيافة عربية', 'مندوبنا يتحدث لغتكم ويرافقكم من لحظة الوصول حتى المغادرة.'],
+  ['سيارة خاصة لكم وحدكم', 'لا جولات مشتركة ولا انتظار مجموعات — البرنامج يمشي على وقتكم.'],
+  ['برنامج مرن', 'ترتيب الأيام يُعدَّل حسب الطقس ورغبتكم دون نقصان في عدد الجولات.'],
+  ['أسعار واضحة', 'ما تقرؤونه في هذا المستند هو ما تدفعونه — بلا رسوم تظهر لاحقاً.'],
+];
+
 export function offerHtml(doc: OfferDoc): string {
   const m = (cents: number) => money(cents, doc.currency);
   const cheapest = Math.min(...doc.tiers.map((t) => t.price));
   const gallery = (doc.gallery ?? []).filter(Boolean);
   const hero = doc.heroImage ?? '';
   const strip = gallery.length ? gallery : hero ? [hero] : [];
-  const tourPages = chunk(doc.tours, TOURS_PER_SHEET);
+  const dayPages = chunk(doc.itinerary ?? [], DAYS_PER_SHEET);
+  const route = doc.route ?? [];
+  const practical = doc.practical ?? {};
+  const chosen = doc.tiers.find((t) => t.recommended) ?? doc.tiers[0];
 
   const footer = (label: string) =>
-    `<div class="foot"><span>${esc(brand.name)} · ${esc(brand.website)}</span>
-       <span class="ltr num">${esc(doc.serial)}</span><span>${esc(label)}</span></div>`;
+    `<div class="foot"><span>${esc(brand.name)} · ${esc(brand.website)}</span>` +
+    `<span class="ltr num">${esc(doc.serial)}</span><span>${esc(label)}</span></div>`;
+
+  const practicalRows: Array<[string, string]> = (
+    [
+      ['أفضل وقت للزيارة', practical.best_time],
+      ['الطقس المتوقع', practical.weather],
+      ['العملة والصرافة', practical.currency],
+      ['مدة الطيران', practical.flight],
+      ['ماذا تحزمون', practical.pack],
+    ] as Array<[string, string | undefined]>
+  ).flatMap(([k, v]) => (v ? [[k, v] as [string, string]] : []));
 
   return `<!doctype html>
 <html lang="ar" dir="rtl">
@@ -103,13 +134,12 @@ ${fontFaceCss()}
   body {
     font-family: ${fonts.body};
     font-size: 11pt;
-    line-height: 1.6;
+    line-height: 1.65;
     color: ${palette.ink};
     background: ${palette.cream};
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  /* العربية متصلة الحروف: أي letter-spacing يفكّ الوصل. لا يُستعمل على نص عربي. */
   .ltr { direction: ltr; unicode-bidi: isolate; }
   .num { font-variant-numeric: tabular-nums; }
 
@@ -129,198 +159,161 @@ ${fontFaceCss()}
     font-size: 7.5pt; color: ${palette.muted};
   }
 
+  h3.sec { font-family: ${fonts.display}; font-size: 21pt; font-weight: 700; color: ${palette.seaDeep}; margin: 0 0 1.5mm; }
+  .sec-note { font-size: 9.5pt; color: ${palette.muted}; margin: 0 0 4mm; }
+  .sec-rule { height: 0.5mm; background: ${palette.sand}; width: 16mm; margin: 0 0 6mm; }
+
   /* ---------------- الغلاف ---------------- */
   .cover { color: #fff; }
-  .cover img.bleed {
-    position: absolute; inset: 0;
-    width: 100%; height: 100%;
-    object-fit: cover;
-  }
+  .cover img.bleed { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .cover .scrim {
     position: absolute; inset: 0;
-    background:
-      linear-gradient(to top, rgba(23,86,96,.93) 0%, rgba(23,86,96,.62) 36%,
-                      rgba(23,86,96,.14) 64%, rgba(23,86,96,.42) 100%);
+    background: linear-gradient(to top, rgba(23,86,96,.93) 0%, rgba(23,86,96,.62) 36%,
+                                rgba(23,86,96,.14) 64%, rgba(23,86,96,.42) 100%);
   }
   .cover .pad { padding: 16mm 16mm 14mm; }
-
   .cover-top { display: flex; align-items: center; gap: 5mm; }
   .cover-top img { width: 17mm; height: 17mm; object-fit: contain; }
-  .cover-top h1 {
-    font-family: ${fonts.display}; font-size: 17pt; font-weight: 700;
-    margin: 0; line-height: 1.25; color: #fff;
-  }
-  .cover-top p { margin: 0; font-size: 8.5pt; color: rgba(255,255,255,.72); }
-
+  .cover-top h1 { font-family: ${fonts.display}; font-size: 17pt; font-weight: 700; margin: 0; line-height: 1.25; color: #fff; }
+  .cover-top p { margin: 0; font-size: 8.5pt; color: rgba(255,255,255,.75); }
   .cover-mid { margin-top: auto; }
-  .eyebrow { font-size: 11pt; font-weight: 600; color: ${palette.sun}; margin: 0 0 3mm;
-    text-shadow: 0 .5mm 2mm rgba(0,0,0,.45); }
+  .eyebrow { font-size: 11pt; font-weight: 500; color: ${palette.sun}; margin: 0 0 3mm; text-shadow: 0 .5mm 2mm rgba(0,0,0,.45); }
   .cover-mid h2 {
-    font-family: ${fonts.display}; font-weight: 700;
-    font-size: 46pt; line-height: 1.08; margin: 0 0 3mm; color: #fff;
+    font-family: ${fonts.display}; font-weight: 900;
+    font-size: 48pt; line-height: 1.08; margin: 0 0 3mm; color: #fff;
     text-shadow: 0 1mm 4mm rgba(0,0,0,.35);
   }
-  .cover-mid .duration { font-size: 13pt; color: rgba(255,255,255,.86); margin: 0 0 7mm; }
+  .cover-mid .duration { font-size: 13pt; color: rgba(255,255,255,.88); margin: 0 0 7mm; }
   .cover-rule { width: 30mm; height: 0.6mm; background: ${palette.sun}; margin-bottom: 7mm; }
   .cover-price { display: flex; align-items: baseline; gap: 4mm; margin: 0 0 10mm; }
-  .cover-price span { font-size: 9.5pt; color: rgba(255,255,255,.75); }
-  .cover-price strong {
-    font-family: ${fonts.display}; font-size: 38pt; color: ${palette.sun};
-    line-height: 1; font-variant-numeric: tabular-nums;
-  }
-
-  .cover-bar {
-    display: grid; grid-template-columns: repeat(3, 1fr);
-    border-top: 0.2mm solid rgba(255,255,255,.28);
-    padding-top: 5mm;
-  }
+  .cover-price span { font-size: 9.5pt; color: rgba(255,255,255,.78); }
+  .cover-price strong { font-family: ${fonts.display}; font-size: 40pt; color: ${palette.sun}; line-height: 1; font-variant-numeric: tabular-nums; }
+  .cover-bar { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 0.2mm solid rgba(255,255,255,.28); padding-top: 5mm; }
   .cover-bar div { text-align: center; }
   .cover-bar div + div { border-inline-start: 0.2mm solid rgba(255,255,255,.2); }
-  .cover-bar span { display: block; font-size: 8pt; color: rgba(255,255,255,.6); margin-bottom: .8mm; }
-  .cover-bar strong { font-size: 10.5pt; font-weight: 600; color: #fff; }
+  .cover-bar span { display: block; font-size: 8pt; color: rgba(255,255,255,.62); margin-bottom: .8mm; }
+  .cover-bar strong { font-size: 10.5pt; font-weight: 500; color: #fff; }
 
-  /* ---------------- شريط الصور ---------------- */
+  /* ---------------- رسالة الترحيب ---------------- */
+  .letter { font-size: 11.5pt; line-height: 1.95; color: ${palette.ink2}; max-width: 155mm; }
+  .letter .hi { font-family: ${fonts.display}; font-size: 22pt; font-weight: 700; color: ${palette.seaDeep}; margin: 0 0 4mm; }
+  .letter p { margin: 0 0 4mm; }
+  .sign { margin-top: 6mm; font-size: 10pt; color: ${palette.muted}; }
+  .sign b { display: block; font-size: 11.5pt; color: ${palette.seaDeep}; font-weight: 700; }
+
+  .promises { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-top: 9mm; }
+  .promise { background: #fff; border-radius: 4mm; padding: 5mm 5.5mm; box-shadow: 0 1mm 3mm rgba(46,157,168,.12); }
+  .promise b { display: block; font-size: 11pt; color: ${palette.seaDeep}; margin-bottom: 1.5mm; }
+  .promise span { font-size: 9.5pt; color: ${palette.ink2}; line-height: 1.6; }
+
+  /* ---------------- البرنامج اليومي ---------------- */
+  .days { display: flex; flex-direction: column; gap: 4mm; }
+  .day { display: grid; grid-template-columns: 15mm 1fr; gap: 4mm; align-items: start; }
+  .day .badge { background: ${palette.seaSoft}; border-radius: 3mm; text-align: center; padding: 2.5mm 1mm; color: ${palette.seaDeep}; }
+  .day .badge small { display: block; font-size: 7.5pt; opacity: .8; }
+  .day .badge b { display: block; font-size: 15pt; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .day h4 { margin: 0 0 1mm; font-size: 12pt; font-weight: 700; color: ${palette.seaDeep}; line-height: 1.35; }
+  .day p { margin: 0; font-size: 9.8pt; line-height: 1.7; color: ${palette.ink2}; }
+  .day .sleep { display: inline-block; margin-top: 1.5mm; font-size: 8.5pt; color: ${palette.sand}; }
+
+  /* ---------------- المسار والإقامة ---------------- */
+  .route { display: flex; align-items: stretch; margin-bottom: 9mm; }
+  .stop { flex: 1; text-align: center; position: relative; padding: 0 2mm; }
+  .stop::before { content: ""; position: absolute; top: 5mm; inset-inline: 50% -50%; height: 0.5mm; background: ${palette.line}; }
+  .stop:last-child::before { display: none; }
+  .stop .dot {
+    position: relative; width: 10mm; height: 10mm; margin: 0 auto 2.5mm;
+    border-radius: 50%; background: ${palette.sea}; color: #fff;
+    font-size: 10pt; font-weight: 700; line-height: 10mm; font-variant-numeric: tabular-nums;
+  }
+  .stop b { display: block; font-size: 10.5pt; color: ${palette.seaDeep}; }
+  .stop span { font-size: 8.5pt; color: ${palette.muted}; }
+
+  .hotels { display: flex; flex-direction: column; gap: 3mm; }
+  .hotelrow {
+    display: grid; grid-template-columns: 26mm 1fr auto; gap: 4mm; align-items: center;
+    background: #fff; border-radius: 3mm; padding: 4mm 5mm;
+    box-shadow: 0 .8mm 2.5mm rgba(46,157,168,.10);
+  }
+  .hotelrow .lvl { font-size: 10pt; font-weight: 700; color: ${palette.seaDeep}; }
+  .hotelrow .nm { font-size: 10.5pt; color: ${palette.ink}; }
+  .hotelrow .st { font-size: 9.5pt; color: ${palette.sun}; }
+
+  /* ---------------- شريط الصور والحشوة ---------------- */
   .strip { display: grid; gap: 2mm; margin-bottom: 8mm; }
-  .strip.one   { grid-template-columns: 1fr; }
-  .strip.two   { grid-template-columns: 1fr 1fr; }
+  .strip.one { grid-template-columns: 1fr; }
+  .strip.two { grid-template-columns: 1fr 1fr; }
   .strip.three { grid-template-columns: 1.6fr 1fr 1fr; }
-  .strip img { width: 100%; height: 52mm; object-fit: cover; display: block; }
+  .strip img { width: 100%; height: 52mm; object-fit: cover; display: block; border-radius: 2mm; }
   .strip.one img { height: 60mm; }
 
-  /* ---------------- الأقسام ---------------- */
-  h3.sec { font-family: ${fonts.display}; font-size: 20pt; font-weight: 700; color: ${palette.pine}; margin: 0 0 1.5mm; }
-  .sec-note { font-size: 9pt; color: ${palette.muted}; margin: 0 0 4mm; }
-  .sec-rule { height: 0.5mm; background: ${palette.copper}; width: 16mm; margin: 0 0 6mm; }
-
-  ol.tours { list-style: none; margin: 0; padding: 0; counter-reset: t; }
-  ol.tours li {
-    counter-increment: t;
-    display: grid; grid-template-columns: 8mm 1fr; gap: 3mm; align-items: center;
-    padding: 2.4mm 0; border-bottom: 0.2mm solid ${palette.lineSoft};
-  }
-  ol.tours li:last-child { border-bottom: 0; }
-  ol.tours li::before {
-    content: counter(t);
-    font-variant-numeric: tabular-nums; color: ${palette.copper}; font-weight: 600;
-    font-size: 9.5pt; text-align: center;
-    border: 0.25mm solid ${palette.copper}; border-radius: 50%;
-    width: 6.5mm; height: 6.5mm; line-height: 6.1mm;
-  }
-
-  /* يملأ ما تبقّى من الصفحة بصورة بدل أن يُترك بياضاً ميتاً.
-     flex:1 مع min-height:0 يعني: خذ الفائض فقط، واختفِ إن لم يوجد فائض. */
-  .filler { flex: 1; min-height: 0; position: relative; overflow: hidden; margin: 7mm 0 0; }
+  .filler { flex: 1; min-height: 0; position: relative; overflow: hidden; margin: 7mm 0 0; border-radius: 3mm; }
   .filler img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .filler .cap {
-    position: absolute; inset-inline-start: 0; bottom: 0; right: 0;
+    position: absolute; inset-inline: 0; bottom: 0;
     background: linear-gradient(to top, rgba(23,86,96,.85), transparent);
     color: #fff; padding: 6mm 6mm 4mm; font-size: 10pt;
   }
 
-  .details { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; margin-top: 6mm; }
-  .details div { background: ${palette.paper}; border-inline-start: 0.7mm solid ${palette.teal}; padding: 3mm 4mm; }
-  .details span { display: block; font-size: 8pt; color: ${palette.muted}; }
-  .details strong { font-size: 10pt; color: ${palette.pine}; font-weight: 600; }
-
   /* ---------------- الخيارات ---------------- */
-  .tiers {
-    display: grid; grid-template-columns: repeat(3, 1fr);
-    gap: 5mm; align-items: start; padding-top: 5mm;
-  }
-  .tier {
-    border-radius: 4mm; overflow: hidden; background: ${palette.card};
-    box-shadow: 0 1mm 4mm rgba(46,157,168,.16);
-    display: flex; flex-direction: column;
-  }
-  /* البطاقة الموصى بها مرفوعة قليلاً وظلّها أعمق — الفرق يُرى قبل أن يُقرأ */
+  .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5mm; align-items: start; padding-top: 5mm; }
+  .tier { border-radius: 4mm; overflow: hidden; background: ${palette.card};
+    box-shadow: 0 1mm 4mm rgba(46,157,168,.16); display: flex; flex-direction: column; }
   .tier.rec { box-shadow: 0 2mm 8mm rgba(46,157,168,.34); margin-top: -5mm; }
-
-  .tier .top { position: relative; height: 36mm; overflow: hidden; background: ${palette.pine}; }
+  .tier .ribbon { background: ${palette.seaDeep}; color: #fff; font-size: 9.5pt; font-weight: 700; padding: 2.2mm; text-align: center; }
+  .tier .top { position: relative; height: 36mm; overflow: hidden; background: ${palette.seaDeep}; }
   .tier .top img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .tier .top .veil {
-    position: absolute; inset: 0;
-    background: linear-gradient(to top, rgba(23,86,96,.88) 0%, rgba(23,86,96,.20) 74%);
-  }
+  .tier .top .veil { position: absolute; inset: 0; background: linear-gradient(to top, rgba(23,86,96,.88) 0%, rgba(23,86,96,.20) 74%); }
   .tier .top .name { position: absolute; inset-inline: 4.5mm; bottom: 3.5mm; color: #fff; }
   .tier .top h4 { margin: 0; font-size: 15pt; font-weight: 700; line-height: 1.2; }
   .tier .top .stars { color: ${palette.sun}; font-size: 9.5pt; margin-top: .6mm; }
-  .tier .ribbon {
-    background: ${palette.seaDeep}; color: #fff; font-size: 9.5pt; font-weight: 700;
-    padding: 2.2mm; text-align: center;
-  }
-
   .tier .body { padding: 5mm 4.5mm 6mm; display: flex; flex-direction: column; flex: 1; }
-  .tier .price {
-    font-family: ${fonts.display}; font-size: 27pt; color: ${palette.copper};
-    line-height: 1.05; font-variant-numeric: tabular-nums; margin: 0;
-  }
+  .tier .price { font-family: ${fonts.display}; font-size: 27pt; color: ${palette.sand}; line-height: 1.05; font-variant-numeric: tabular-nums; margin: 0; }
   .tier .per { font-size: 8.5pt; color: ${palette.muted}; margin: 1mm 0 4mm; font-variant-numeric: tabular-nums; }
-  .tier .hotel {
-    font-size: 9pt; color: ${palette.ink2}; margin: 0 0 3.5mm;
-    padding-bottom: 3mm; border-bottom: 0.2mm solid ${palette.lineSoft};
-  }
+  .tier .hotel { font-size: 9pt; color: ${palette.ink2}; margin: 0 0 3.5mm; padding-bottom: 3mm; border-bottom: 0.2mm solid ${palette.lineSoft}; }
   .tier ul { margin: 0; padding: 0; list-style: none; font-size: 9pt; color: ${palette.ink2}; }
-  .tier ul li {
-    display: grid; grid-template-columns: 4.5mm 1fr; gap: 1.5mm;
-    align-items: start; margin-bottom: 1.7mm; line-height: 1.45;
-  }
-  .tier ul li::before { content: "✓"; color: ${palette.teal}; font-weight: 700; font-size: 9.5pt; }
+  .tier ul li { display: grid; grid-template-columns: 4.5mm 1fr; gap: 1.5mm; align-items: start; margin-bottom: 1.7mm; line-height: 1.45; }
+  .tier ul li::before { content: "✓"; color: ${palette.sea}; font-weight: 700; font-size: 9.5pt; }
 
-  /* يشمل / لا يشمل: كتل ملوّنة بلا حدود، وعلامات بدل نقاط */
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; margin-top: 11mm; }
+  /* ---------------- يشمل / لا يشمل / عملي ---------------- */
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
   .box { border-radius: 3mm; padding: 5mm 6mm; }
-  .box.inc { background: ${palette.tealSoft}; }
-  .box.exc { background: ${palette.copperSoft}; }
+  .box.inc { background: ${palette.seaSoft}; }
+  .box.exc { background: ${palette.sandSoft}; }
   .box h4 { margin: 0 0 3mm; font-size: 11.5pt; font-weight: 700; }
-  .box.inc h4 { color: ${palette.teal}; }
-  .box.exc h4 { color: ${palette.copper}; }
+  .box.inc h4 { color: ${palette.seaDeep}; }
+  .box.exc h4 { color: ${palette.sand}; }
   .box ul { margin: 0; padding: 0; list-style: none; font-size: 9.5pt; color: ${palette.ink2}; }
-  .box li {
-    display: grid; grid-template-columns: 5mm 1fr; gap: 1.5mm;
-    align-items: start; margin-bottom: 1.9mm; line-height: 1.5;
-  }
-  .box.inc li::before { content: "✓"; color: ${palette.teal}; font-weight: 700; }
-  .box.exc li::before { content: "✕"; color: ${palette.copper}; font-weight: 700; }
+  .box li { display: grid; grid-template-columns: 5mm 1fr; gap: 1.5mm; align-items: start; margin-bottom: 1.9mm; line-height: 1.5; }
+  .box.inc li::before { content: "✓"; color: ${palette.sea}; font-weight: 700; }
+  .box.exc li::before { content: "✕"; color: ${palette.sand}; font-weight: 700; }
 
-  /* شريط طمأنة يختم صفحة الخيارات — لون لا صورة، تفادياً لتكرار صور البطاقات */
-  .assure {
-    margin-top: auto; margin-bottom: 4mm;
-    background: ${palette.pine}; color: #F4FBFB;
-    border-radius: 3mm; padding: 5mm 6mm;
-    display: flex; align-items: center; justify-content: space-between; gap: 5mm;
-  }
-  .assure span { font-size: 10pt; }
-  .assure b { font-family: ${fonts.display}; font-size: 16pt; color: ${palette.sun}; }
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; margin-top: 6mm; }
+  .fact { background: #fff; border-radius: 3mm; padding: 4mm 5mm; box-shadow: 0 .8mm 2.5mm rgba(46,157,168,.10); }
+  .fact b { display: block; font-size: 9pt; color: ${palette.sea}; margin-bottom: 1mm; }
+  .fact span { font-size: 9.8pt; color: ${palette.ink2}; line-height: 1.55; }
 
-  /* ---------------- الشروط والتواصل ---------------- */
-  .deposit {
-    display: flex; align-items: center; justify-content: space-between; gap: 6mm;
-    background: ${palette.pine}; color: #F4FBFB; padding: 6mm 7mm; margin-bottom: 7mm;
-  }
-  .deposit span { font-size: 10.5pt; }
-  .deposit strong {
-    font-family: ${fonts.display}; font-size: 24pt; color: ${palette.sun};
-    font-variant-numeric: tabular-nums; line-height: 1;
-  }
+  /* ---------------- الدفع والشروط ---------------- */
+  .pay { display: flex; gap: 4mm; margin-bottom: 8mm; }
+  .paystep { flex: 1; background: #fff; border-radius: 3mm; padding: 5mm; text-align: center;
+    box-shadow: 0 1mm 3mm rgba(46,157,168,.12); border-top: 1mm solid ${palette.sea}; }
+  .paystep small { display: block; font-size: 8.5pt; color: ${palette.muted}; }
+  .paystep b { display: block; font-family: ${fonts.display}; font-size: 19pt; color: ${palette.sand};
+    font-variant-numeric: tabular-nums; margin: 1mm 0; }
+  .paystep span { font-size: 9pt; color: ${palette.ink2}; }
+
   ul.terms { margin: 0; padding-inline-start: 5mm; font-size: 9.5pt; color: ${palette.ink2}; }
   ul.terms li { margin-bottom: 1.6mm; }
 
-  /* يأخذ ما تبقّى من الصفحة مثل .filler — لا بياض ميت أسفل الشروط. */
-  .cta {
-    margin-top: 8mm; position: relative; overflow: hidden;
-    flex: 1; min-height: 78mm;
-    display: flex; align-items: center; justify-content: center;
-    text-align: center; color: #fff;
-  }
+  .cta { margin-top: 8mm; position: relative; overflow: hidden; flex: 1; min-height: 62mm;
+    display: flex; align-items: center; justify-content: center; text-align: center; color: #fff; border-radius: 3mm; }
   .cta img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-  .cta .scrim { position: absolute; inset: 0; background: rgba(23,86,96,.76); }
+  .cta .scrim { position: absolute; inset: 0; background: rgba(23,86,96,.78); }
   .cta .inner { position: relative; }
-  .cta p { margin: 0 0 2mm; font-size: 11pt; color: rgba(255,255,255,.85); }
-  .cta .wa {
-    font-family: ${fonts.display}; font-size: 26pt; font-weight: 700; color: ${palette.sun};
-    direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; line-height: 1.3;
-  }
-  .cta small { display: block; margin-top: 2mm; font-size: 9pt; color: rgba(255,255,255,.7); }
+  .cta p { margin: 0 0 2mm; font-size: 11pt; color: rgba(255,255,255,.88); }
+  .cta .wa { font-family: ${fonts.display}; font-size: 26pt; font-weight: 700; color: ${palette.sun};
+    direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; line-height: 1.3; }
+  .cta small { display: block; margin-top: 2mm; font-size: 9pt; color: rgba(255,255,255,.72); }
 </style>
 </head>
 <body>
@@ -337,9 +330,8 @@ ${fontFaceCss()}
         <p>${esc(brand.tagline)}</p>
       </div>
     </div>
-
     <div class="cover-mid">
-      <p class="eyebrow">عرض سعر خاص</p>
+      <p class="eyebrow">مقترح رحلة</p>
       <h2>${esc(doc.destinationName)}</h2>
       <p class="duration num">${doc.days} أيام / ${doc.nights} ليالٍ</p>
       <div class="cover-rule"></div>
@@ -353,52 +345,128 @@ ${fontFaceCss()}
   </div>
 </div>
 
-<!-- ============ 2 · البرنامج ============ -->
-${
-  tourPages.length
-    ? tourPages
-        .map(
-          (page, idx) => `<div class="sheet">
+<!-- ============ 2 · رسالة ترحيب ============ -->
+<div class="sheet">
   <div class="pad">
+    <div class="letter">
+      <p class="hi">${doc.customerName ? `أهلاً بكم ${esc(doc.customerName)}` : 'أهلاً وسهلاً بكم'}</p>
+      <p>
+        يسعدنا أن نضع بين أيديكم مقترح رحلتكم إلى ${esc(doc.destinationName)} لمدة
+        ${doc.days} أيام${doc.travelMonth ? ` في ${esc(doc.travelMonth)}` : ''}.
+        أعددنا هذا البرنامج لـ ${esc(paxLine(doc.travelers))} تحديداً، لا نسخة جاهزة.
+      </p>
+      <p>
+        ستجدون في الصفحات التالية البرنامج يوماً بيوم، والمدن التي تنامون فيها،
+        وثلاثة خيارات تختلف في فئة الفندق والسيارة لا في الجولات — لتختاروا ما يناسبكم
+        دون أن ينقص من رحلتكم شيء.
+      </p>
+      <p>
+        وإن أردتم تعديل أي يوم أو إضافة جولة أو تغيير فندق، راسلونا وسنعيد ترتيبه لكم.
+      </p>
+      <div class="sign">
+        مع تحياتنا،
+        <b>${esc(brand.legalName || brand.name)}</b>
+      </div>
+    </div>
+
+    <div class="promises">
+      ${PROMISES.map(([t, d]) => `<div class="promise"><b>${esc(t)}</b><span>${esc(d)}</span></div>`).join('')}
+    </div>
+
     ${
-      idx === 0 && strip.length
-        ? `<div class="strip ${strip.length >= 3 ? 'three' : strip.length === 2 ? 'two' : 'one'}">
-      ${strip.slice(0, 3).map((u) => `<img src="${esc(u)}" alt="">`).join('\n      ')}
-    </div>`
-        : ''
-    }
-    <h3 class="sec">البرنامج والجولات${tourPages.length > 1 ? ` (${idx + 1}/${tourPages.length})` : ''}</h3>
-    <p class="sec-note">جميع الجولات بسيارة خاصة مع سائق، وتُرتَّب حسب الطقس وأوقات الوصول.</p>
-    <div class="sec-rule"></div>
-    <ol class="tours" style="counter-reset: t ${idx * TOURS_PER_SHEET}">
-      ${page.map((t) => `<li><span>${esc(t)}</span></li>`).join('\n      ')}
-    </ol>
-    ${
-      idx === tourPages.length - 1 && (hero || strip[0])
+      strip[0]
         ? `<div class="filler">
-      <img src="${esc(hero || strip[0]!)}" alt="">
+      <img src="${esc(strip[0])}" alt="">
       <div class="cap">${esc(doc.destinationName)} — ${doc.days} أيام بضيافة عربية</div>
     </div>`
         : ''
     }
+    ${footer('ترحيب')}
+  </div>
+</div>
+
+<!-- ============ 3 · البرنامج اليومي ============ -->
+${dayPages
+  .map(
+    (page, idx) => `<div class="sheet">
+  <div class="pad">
+    <h3 class="sec">البرنامج يوماً بيوم${dayPages.length > 1 ? ` (${idx + 1}/${dayPages.length})` : ''}</h3>
+    <p class="sec-note">جميع الجولات بسيارة خاصة مع سائق. الترتيب قابل للتبديل حسب الطقس دون نقصان في العدد.</p>
+    <div class="sec-rule"></div>
+    <div class="days">
+      ${page
+        .map(
+          (d) => `<div class="day">
+        <div class="badge"><small>اليوم</small><b>${d.n}</b></div>
+        <div>
+          <h4>${esc(d.title)}</h4>
+          <p>${esc(d.body)}</p>
+          ${d.sleep ? `<span class="sleep">المبيت في ${esc(d.sleep)}</span>` : ''}
+        </div>
+      </div>`,
+        )
+        .join('')}
+    </div>
     ${
-      idx === tourPages.length - 1
-        ? `<div class="details">
-      <div><span>عدد الغرف</span><strong class="num">${doc.travelers.rooms}</strong></div>
-      <div><span>موعد السفر</span><strong class="ltr num">${esc(doc.travelMonth ?? 'حسب اختياركم')}</strong></div>
-      <div><span>الزبون</span><strong>${esc(doc.customerName ?? '—')}</strong></div>
-    </div>`
+      strip.length
+        ? `<div class="filler"><img src="${esc(strip[(idx + 1) % strip.length])}" alt=""></div>`
         : ''
     }
     ${footer('البرنامج')}
   </div>
 </div>`,
-        )
-        .join('\n')
-    : ''
-}
+  )
+  .join('')}
 
-<!-- ============ 3 · الخيارات ============ -->
+<!-- ============ 4 · المسار والإقامة ============ -->
+<div class="sheet">
+  <div class="pad">
+    <h3 class="sec">المسار والإقامة</h3>
+    <p class="sec-note">أين تنامون كل ليلة، وفندق كل فئة.</p>
+    <div class="sec-rule"></div>
+
+    ${
+      route.length
+        ? `<div class="route">
+      ${route
+        .map(
+          // الرقم ترتيب المحطة لا عدد الليالي — كان يلتبس بها حين تتساويان
+          (r, i) => `<div class="stop">
+        <div class="dot num">${i + 1}</div>
+        <b>${esc(r.city)}</b>
+        <span>${r.nights === 1 ? 'ليلة واحدة' : `${r.nights} ليالٍ`}</span>
+      </div>`,
+        )
+        .join('')}
+    </div>`
+        : ''
+    }
+
+    <div class="hotels">
+      ${doc.tiers
+        .map(
+          (t) => `<div class="hotelrow">
+        <span class="lvl">${esc(t.label)}</span>
+        <span class="nm">${esc(t.hotelName ?? 'حسب التوفر')}</span>
+        <span class="st">${t.hotelClass && STARS[t.hotelClass] ? STARS[t.hotelClass] : ''}</span>
+      </div>`,
+        )
+        .join('')}
+    </div>
+
+    ${
+      strip[2] ?? strip[0]
+        ? `<div class="filler">
+      <img src="${esc(strip[2] ?? strip[0])}" alt="">
+      <div class="cap">جميع الفنادق مع الإفطار · ${doc.travelers.rooms} غرفة</div>
+    </div>`
+        : ''
+    }
+    ${footer('المسار')}
+  </div>
+</div>
+
+<!-- ============ 5 · الخيارات ============ -->
 <div class="sheet">
   <div class="pad">
     <h3 class="sec">ثلاثة خيارات</h3>
@@ -427,34 +495,56 @@ ${
         )
         .join('')}
     </div>
-
-    <div class="two">
-      <div class="box inc">
-        <h4>يشمل</h4>
-        <ul>${doc.includes.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>
-      </div>
-      <div class="box exc">
-        <h4>لا يشمل</h4>
-        <ul>${doc.excludes.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>
-      </div>
-    </div>
-    <div class="assure">
-      <span>كل الخيارات تشمل الاستقبال من المطار وسيارة خاصة طوال البرنامج</span>
-      <b class="ltr num">${esc(whatsappDisplay())}</b>
-    </div>
     ${footer('الخيارات')}
   </div>
 </div>
 
-<!-- ============ 4 · الشروط والتواصل ============ -->
+<!-- ============ 6 · يشمل / لا يشمل + معلومات عملية ============ -->
 <div class="sheet">
   <div class="pad">
-    <h3 class="sec">الحجز والشروط</h3>
+    <h3 class="sec">ما يشمله العرض</h3>
+    <div class="sec-rule"></div>
+    <div class="two">
+      <div class="box inc">
+        <h4>يشمل</h4>
+        <ul>${doc.includes.map((i) => `<li><span>${esc(i)}</span></li>`).join('')}</ul>
+      </div>
+      <div class="box exc">
+        <h4>لا يشمل</h4>
+        <ul>${doc.excludes.map((i) => `<li><span>${esc(i)}</span></li>`).join('')}</ul>
+      </div>
+    </div>
+
+    ${
+      practicalRows.length
+        ? `<h3 class="sec" style="margin-top:10mm">معلومات تهمّكم</h3>
+    <div class="sec-rule"></div>
+    <div class="facts">
+      ${practicalRows.map(([k, v]) => `<div class="fact"><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join('')}
+    </div>`
+        : ''
+    }
+    ${footer('التفاصيل')}
+  </div>
+</div>
+
+<!-- ============ 7 · الدفع والشروط والتواصل ============ -->
+<div class="sheet">
+  <div class="pad">
+    <h3 class="sec">الحجز والدفع</h3>
     <div class="sec-rule"></div>
 
-    <div class="deposit">
-      <span>لتثبيت الحجز — عربون ${doc.depositPct}٪</span>
-      <strong>${esc(m(doc.depositAmount))}</strong>
+    <div class="pay">
+      <div class="paystep">
+        <small>عند تأكيد الحجز</small>
+        <b>${esc(m(doc.depositAmount))}</b>
+        <span>عربون ${doc.depositPct}٪ — تُثبَّت به الفنادق</span>
+      </div>
+      <div class="paystep">
+        <small>قبل السفر بـ 14 يوماً</small>
+        <b>${esc(m(Math.max(0, (chosen?.price ?? 0) - doc.depositAmount)))}</b>
+        <span>المبلغ المتبقي من قيمة البكج</span>
+      </div>
     </div>
 
     <ul class="terms">
@@ -467,10 +557,10 @@ ${
     </ul>
 
     <div class="cta">
-      ${strip.at(-1) ? `<img src="${esc(strip.at(-1)!)}" alt="">` : ''}
+      ${strip.at(-1) ? `<img src="${esc(strip.at(-1))}" alt="">` : ''}
       <div class="scrim"></div>
       <div class="inner">
-        <p>لتأكيد الحجز أو تعديل البرنامج، راسلنا مباشرة</p>
+        <p>لتأكيد الحجز أو تعديل البرنامج، راسلونا مباشرة</p>
         <div class="wa">${esc(whatsappDisplay())}</div>
         <small>
           ${esc(brand.website)}${brand.email ? ` · ${esc(brand.email)}` : ''}${brand.instagram ? ` · @${esc(brand.instagram)}` : ''}

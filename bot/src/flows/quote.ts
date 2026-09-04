@@ -27,6 +27,7 @@ import { toOfferDoc, toCardDoc } from '../offerdoc.ts';
 import { offerHtml } from '../templates/offer.ts';
 import { cardHtml, CARD_DIMENSIONS, type CardSize } from '../templates/card.ts';
 import { renderPdf, renderPng } from '../render.ts';
+import { buildDays, splitNights, parseRoute, parsePractical, type Day, type RouteNight, type Practical } from '../itinerary.ts';
 
 /** إعدادات ثابتة — تنتقل للوحة التحكم في المرحلة الرابعة. */
 const FEES_BP = 250;
@@ -161,6 +162,9 @@ interface Built {
   heroImage: string;
   gallery: string[];
   imageCredits: string;
+  itinerary: Day[];
+  route: RouteNight[];
+  practical: Practical;
 }
 
 function buildOffers(s: Session): Built | null {
@@ -226,6 +230,9 @@ function buildOffers(s: Session): Built | null {
     heroImage: dest.hero_image,
     gallery: db.galleryOf(dest),
     imageCredits: dest.image_credits,
+    itinerary: buildDays(d.nights, tours, parseRoute(dest.route)),
+    route: splitNights(parseRoute(dest.route), d.nights),
+    practical: parsePractical(dest.practical),
     hotelClasses: {
       economy: (three ?? fallback).class,
       premium: (four ?? fallback).class,
@@ -258,6 +265,9 @@ function buildDoc(s: Session, built: Built) {
     heroImage: built.heroImage,
     gallery: built.gallery,
     imageCredits: built.imageCredits,
+    itinerary: built.itinerary,
+    route: built.route,
+    practical: built.practical,
   });
 }
 

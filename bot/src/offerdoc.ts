@@ -8,6 +8,7 @@
 import type { TierOffer, Tier } from './pricing.ts';
 import type { OfferDoc, OfferTier } from './templates/offer.ts';
 import type { CardDoc } from './templates/card.ts';
+import type { Day, RouteNight, Practical } from './itinerary.ts';
 
 /** ما يميّز كل فئة، بلغة الزبون. */
 const TIER_EXTRAS: Record<Tier, string[]> = {
@@ -42,6 +43,9 @@ export interface OfferDocInput {
   heroImage?: string;
   gallery?: string[];
   imageCredits?: string;
+  itinerary?: Day[];
+  route?: RouteNight[];
+  practical?: Practical;
 }
 
 export function toOfferDoc(i: OfferDocInput): OfferDoc {
@@ -92,6 +96,9 @@ export function toOfferDoc(i: OfferDocInput): OfferDoc {
     heroImage: i.heroImage,
     gallery: i.gallery,
     imageCredits: i.imageCredits,
+    itinerary: i.itinerary,
+    route: i.route,
+    practical: i.practical,
   };
 }
 
