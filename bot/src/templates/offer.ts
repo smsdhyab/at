@@ -106,6 +106,14 @@ export function offerHtml(doc: OfferDoc): string {
   const practical = doc.practical ?? {};
   const chosen = doc.tiers.find((t) => t.recommended) ?? doc.tiers[0];
 
+  /** خلفية الصفحة — صورة مختلفة لكل صفحة تدور على المعرض. */
+  let bgTurn = 0;
+  const pageBg = (): string => {
+    if (!strip.length) return '';
+    const url = strip[bgTurn++ % strip.length]!;
+    return `<div class="bg"><img src="${esc(url)}" alt=""><div class="fade"></div></div>`;
+  };
+
   const footer = (label: string) =>
     `<div class="foot"><span>${esc(brand.name)} · ${esc(brand.website)}</span>` +
     `<span class="ltr num">${esc(doc.serial)}</span><span>${esc(label)}</span></div>`;
@@ -239,13 +247,25 @@ ${fontFaceCss()}
   .hotelrow .nm { font-size: 10.5pt; color: ${palette.ink}; }
   .hotelrow .st { font-size: 9.5pt; color: ${palette.sun}; }
 
-  /* ---------------- شريط الصور والحشوة ---------------- */
-  .strip { display: grid; gap: 2mm; margin-bottom: 8mm; }
-  .strip.one { grid-template-columns: 1fr; }
-  .strip.two { grid-template-columns: 1fr 1fr; }
-  .strip.three { grid-template-columns: 1.6fr 1fr 1fr; }
-  .strip img { width: 100%; height: 52mm; object-fit: cover; display: block; border-radius: 2mm; }
-  .strip.one img { height: 60mm; }
+  /* ---------------- خلفية الصفحة ---------------- */
+  /* منظر تركي أسفل كل صفحة يتلاشى صعوداً في لون الورق: الصفحة لا تظهر
+     بيضاء فارغة، والنص يبقى على أرضية نظيفة تماماً في أعلى الصفحة. */
+  .bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
+  .bg img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .bg .fade {
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(to bottom,
+        ${palette.cream} 0%,
+        ${palette.cream} 50%,
+        rgba(253,250,246,.94) 60%,
+        rgba(253,250,246,.55) 70%,
+        rgba(253,250,246,.38) 84%,
+        rgba(253,250,246,.88) 95%,
+        ${palette.cream} 100%),
+      linear-gradient(to bottom, rgba(46,157,168,0) 55%, rgba(46,157,168,.14) 100%);
+  }
+  .pad { z-index: 1; }
 
   .filler { flex: 1; min-height: 0; position: relative; overflow: hidden; margin: 7mm 0 0; border-radius: 3mm; }
   .filler img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -347,6 +367,7 @@ ${fontFaceCss()}
 
 <!-- ============ 2 · رسالة ترحيب ============ -->
 <div class="sheet">
+  ${pageBg()}
   <div class="pad">
     <div class="letter">
       <p class="hi">${doc.customerName ? `أهلاً بكم ${esc(doc.customerName)}` : 'أهلاً وسهلاً بكم'}</p>
@@ -373,14 +394,6 @@ ${fontFaceCss()}
       ${PROMISES.map(([t, d]) => `<div class="promise"><b>${esc(t)}</b><span>${esc(d)}</span></div>`).join('')}
     </div>
 
-    ${
-      strip[0]
-        ? `<div class="filler">
-      <img src="${esc(strip[0])}" alt="">
-      <div class="cap">${esc(doc.destinationName)} — ${doc.days} أيام بضيافة عربية</div>
-    </div>`
-        : ''
-    }
     ${footer('ترحيب')}
   </div>
 </div>
@@ -389,6 +402,7 @@ ${fontFaceCss()}
 ${dayPages
   .map(
     (page, idx) => `<div class="sheet">
+  ${pageBg()}
   <div class="pad">
     <h3 class="sec">البرنامج يوماً بيوم${dayPages.length > 1 ? ` (${idx + 1}/${dayPages.length})` : ''}</h3>
     <p class="sec-note">جميع الجولات بسيارة خاصة مع سائق. الترتيب قابل للتبديل حسب الطقس دون نقصان في العدد.</p>
@@ -407,11 +421,6 @@ ${dayPages
         )
         .join('')}
     </div>
-    ${
-      strip.length
-        ? `<div class="filler"><img src="${esc(strip[(idx + 1) % strip.length])}" alt=""></div>`
-        : ''
-    }
     ${footer('البرنامج')}
   </div>
 </div>`,
@@ -420,6 +429,7 @@ ${dayPages
 
 <!-- ============ 4 · المسار والإقامة ============ -->
 <div class="sheet">
+  ${pageBg()}
   <div class="pad">
     <h3 class="sec">المسار والإقامة</h3>
     <p class="sec-note">أين تنامون كل ليلة، وفندق كل فئة.</p>
@@ -454,20 +464,13 @@ ${dayPages
         .join('')}
     </div>
 
-    ${
-      strip[2] ?? strip[0]
-        ? `<div class="filler">
-      <img src="${esc(strip[2] ?? strip[0])}" alt="">
-      <div class="cap">جميع الفنادق مع الإفطار · ${doc.travelers.rooms} غرفة</div>
-    </div>`
-        : ''
-    }
     ${footer('المسار')}
   </div>
 </div>
 
 <!-- ============ 5 · الخيارات ============ -->
 <div class="sheet">
+  ${pageBg()}
   <div class="pad">
     <h3 class="sec">ثلاثة خيارات</h3>
     <p class="sec-note">نفس البرنامج ونفس الجولات — الفرق في فئة الفندق والسيارة والخدمات.</p>
@@ -501,6 +504,7 @@ ${dayPages
 
 <!-- ============ 6 · يشمل / لا يشمل + معلومات عملية ============ -->
 <div class="sheet">
+  ${pageBg()}
   <div class="pad">
     <h3 class="sec">ما يشمله العرض</h3>
     <div class="sec-rule"></div>
@@ -530,6 +534,7 @@ ${dayPages
 
 <!-- ============ 7 · الدفع والشروط والتواصل ============ -->
 <div class="sheet">
+  ${pageBg()}
   <div class="pad">
     <h3 class="sec">الحجز والدفع</h3>
     <div class="sec-rule"></div>
