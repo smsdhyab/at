@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "node --env-file-if-exists=.env src/bot.ts",
     "start": "node --env-file-if-exists=.env src/bot.ts",
-    "test": "node --test src/*.test.ts",
+    "test": "node --env-file-if-exists=.env --test src/*.test.ts",
     "migrate": "node --env-file-if-exists=.env src/migrate.ts",
     "typecheck": "tsc --noEmit"
   },

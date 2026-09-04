@@ -17,6 +17,13 @@ const CLASS_LABEL: Record<string, string> = {
   cabin: 'كوخ / شاليه',
 };
 
+/** أنواع السيارات — مغلقة لأن محرك التسعير يبحث عنها بهذه المفاتيح. */
+const CAR_KINDS: Record<string, string> = {
+  sedan: 'سيدان',
+  van: 'فان',
+  vip: 'فان VIP',
+};
+
 const SERVICE_LABEL: Record<string, string> = {
   transfer_rate: 'نقلة المطار',
   ticket_pp: 'تذكرة الدخول للشخص',
@@ -24,7 +31,7 @@ const SERVICE_LABEL: Record<string, string> = {
 };
 
 export async function startRates(ctx: Context): Promise<void> {
-  const destinations = db.listDestinations();
+  const destinations = await db.listDestinations();
   await ctx.reply('<b>الأسعار</b>\n\nاختر الوجهة:', {
     parse_mode: 'HTML',
     reply_markup: keyboard(destinations, (d) => d.name, (d) => `r:d:${d.slug}`, 1),
@@ -32,7 +39,7 @@ export async function startRates(ctx: Context): Promise<void> {
 }
 
 async function showCategories(ctx: Context, slug: string, edit: boolean): Promise<void> {
-  const dest = db.getDestination(slug);
+  const dest = await db.getDestination(slug);
   if (!dest) return;
   const kb = new InlineKeyboard()
     .text('🏨 الفنادق', `r:c:h:${slug}`)
@@ -47,7 +54,7 @@ async function showCategories(ctx: Context, slug: string, edit: boolean): Promis
 
 async function showHotels(ctx: Context, slug: string): Promise<void> {
   const kb = new InlineKeyboard();
-  for (const h of db.listHotels(slug)) {
+  for (const h of await db.listHotels(slug)) {
     kb.text(
       `${CLASS_LABEL[h.class] ?? h.class} · ${h.name} — ${fmt(h.rate_normal)} / ${fmt(h.rate_high)}`,
       `r:eh:${h.id}`,
@@ -63,8 +70,8 @@ async function showHotels(ctx: Context, slug: string): Promise<void> {
 
 async function showCars(ctx: Context, slug: string): Promise<void> {
   const kb = new InlineKeyboard();
-  for (const c of db.listCars(slug)) kb.text(`${c.name} — ${fmt(c.rate_day)} / يوم`, `r:ec:${c.id}`).row();
-  kb.text('◀️ رجوع', `r:d:${slug}`);
+  for (const c of await db.listCars(slug)) kb.text(`${c.name} — ${fmt(c.rate_day)} / يوم`, `r:ec:${c.id}`).row();
+  kb.text('➕ أضف سيارة', `r:ac:${slug}`).row().text('◀️ رجوع', `r:d:${slug}`);
   await ctx.editMessageText('<b>السيارات</b>\nالسعر لليوم الواحد شاملاً السائق.', {
     parse_mode: 'HTML',
     reply_markup: kb,
@@ -73,7 +80,7 @@ async function showCars(ctx: Context, slug: string): Promise<void> {
 
 async function showTours(ctx: Context, slug: string): Promise<void> {
   const kb = new InlineKeyboard();
-  for (const t of db.listTours(slug)) kb.text(`${t.name} — ${fmt(t.price)}`, `r:et:${t.id}`).row();
+  for (const t of await db.listTours(slug)) kb.text(`${t.name} — ${fmt(t.price)}`, `r:et:${t.id}`).row();
   kb.text('➕ أضف جولة', `r:at:${slug}`).row().text('◀️ رجوع', `r:d:${slug}`);
   await ctx.editMessageText('<b>الجولات</b>\nالسعر للمجموعة كاملة لا للشخص.', {
     parse_mode: 'HTML',
@@ -82,7 +89,7 @@ async function showTours(ctx: Context, slug: string): Promise<void> {
 }
 
 async function showServices(ctx: Context, slug: string): Promise<void> {
-  const dest = db.getDestination(slug);
+  const dest = await db.getDestination(slug);
   if (!dest) return;
   const kb = new InlineKeyboard()
     .text(`نقلة المطار — ${fmt(dest.transfer_rate)}`, `r:es:${slug}:transfer_rate`).row()
@@ -112,8 +119,8 @@ export async function handleRatesStep(ctx: Context, s: Session, text: string): P
       }
       const normal = nums[0]!;
       const high = nums[1] ?? normal;
-      db.setHotelRates(Number(arg), normal, high);
-      clearStep(s);
+      await db.setHotelRates(Number(arg), normal, high);
+      await clearStep(s);
       await ctx.reply(`✅ تم — عادي ${fmt(normal)} · مرتفع ${fmt(high)}`);
       return true;
     }
@@ -127,17 +134,17 @@ export async function handleRatesStep(ctx: Context, s: Session, text: string): P
         return true;
       }
       if (s.step === 'r.car') {
-        db.setCarRate(Number(arg), cents);
+        await db.setCarRate(Number(arg), cents);
         await ctx.reply(`✅ تم — ${fmt(cents)} لليوم`);
       } else if (s.step === 'r.tour') {
-        db.setTourPrice(Number(arg), cents);
+        await db.setTourPrice(Number(arg), cents);
         await ctx.reply(`✅ تم — ${fmt(cents)} للجولة`);
       } else {
         const [slug, field] = arg.split('|');
-        db.setDestinationRate(slug!, field as db.DestRateField, cents);
+        await db.setDestinationRate(slug!, field as db.DestRateField, cents);
         await ctx.reply(`✅ تم — ${SERVICE_LABEL[field!]} = ${fmt(cents)}`);
       }
-      clearStep(s);
+      await clearStep(s);
       return true;
     }
 
@@ -147,9 +154,30 @@ export async function handleRatesStep(ctx: Context, s: Session, text: string): P
         await ctx.reply('اكتب هكذا: <code>جولة أوزنجول 90</code>', { parse_mode: 'HTML' });
         return true;
       }
-      db.addTour(arg, name, price);
-      clearStep(s);
+      await db.addTour(arg, name, price);
+      await clearStep(s);
       await ctx.reply(`✅ أُضيفت «${name}» بسعر ${fmt(price)}`);
+      return true;
+    }
+
+    case 'r.addCar': {
+      // الصيغة: النوع | الاسم | السعر
+      const parts = text.split('|').map((x) => x.trim());
+      const kind = (parts[0] ?? '').toLowerCase();
+      const name = parts[1];
+      const rate = toCents(parts[2] ?? '0');
+      if (!CAR_KINDS[kind] || !name || rate <= 0) {
+        await ctx.reply(
+          'الصيغة: <code>النوع | الاسم | السعر</code>\n' +
+            'النوع واحد من: sedan · van · vip\n\n' +
+            'مثال:\n<code>van | فان مرسيدس مع سائق | 110</code>',
+          { parse_mode: 'HTML' },
+        );
+        return true;
+      }
+      await db.addCar(arg, kind, name, rate);
+      await clearStep(s);
+      await ctx.reply(`✅ أُضيفت «${name}» — ${fmt(rate)} لليوم`);
       return true;
     }
 
@@ -160,18 +188,25 @@ export async function handleRatesStep(ctx: Context, s: Session, text: string): P
       const cls = parts[1] ?? '4';
       const normal = toCents(parts[2] ?? '0');
       const high = toCents(parts[3] ?? '0') || normal;
+      // فرق السرير الثالث اختياري: 35٪ من سعر الغرفة تقدير معقول حتى يُعدَّل
+      const triple = toCents(parts[4] ?? '0') || Math.round((normal * 35) / 100 / 100) * 100;
       if (!name || normal <= 0 || !CLASS_LABEL[cls]) {
         await ctx.reply(
-          'الصيغة: <code>الاسم | الفئة | العادي | المرتفع</code>\n' +
+          'الصيغة: <code>الاسم | الفئة | العادي | المرتفع | السرير_الثالث</code>\n' +
             'الفئة واحدة من: 3 · 4 · 5 · cabin\n\n' +
-            'مثال:\n<code>كوخ كيانا | cabin | 120 | 138</code>',
+            'مثال:\n<code>كوخ كيانا | cabin | 120 | 138 | 45</code>',
           { parse_mode: 'HTML' },
         );
         return true;
       }
-      db.addHotel({ destination: arg, name, class: cls, rate_normal: normal, rate_high: high });
-      clearStep(s);
-      await ctx.reply(`✅ أُضيف «${name}» — ${fmt(normal)} / ${fmt(high)}`);
+      await db.addHotel({
+        destination: arg, name, class: cls,
+        rate_normal: normal, rate_high: high, rate_triple: triple,
+      });
+      await clearStep(s);
+      await ctx.reply(
+        `✅ أُضيف «${name}» — ${fmt(normal)} / ${fmt(high)} · سرير ثالث ${fmt(triple)}`,
+      );
       return true;
     }
 
@@ -181,7 +216,7 @@ export async function handleRatesStep(ctx: Context, s: Session, text: string): P
 }
 
 export async function handleRatesCallback(ctx: Context, parts: string[]): Promise<boolean> {
-  const s = getSession(uid(ctx));
+  const s = await getSession(uid(ctx));
   const [, action, a, b] = parts;
 
   switch (action) {
@@ -205,7 +240,7 @@ export async function handleRatesCallback(ctx: Context, parts: string[]): Promis
 
     case 'eh':
       await ctx.answerCallbackQuery();
-      expectStep(s, 'r.hotel', a!);
+      await expectStep(s, 'r.hotel', a!);
       await ctx.reply(
         'اكتب السعر الجديد للغرفة في الليلة:\n<code>العادي المرتفع</code>\n\n' +
           'مثال: <code>85 98</code>\nأو رقم واحد لتساوي الموسمين.',
@@ -215,36 +250,50 @@ export async function handleRatesCallback(ctx: Context, parts: string[]): Promis
 
     case 'ec':
       await ctx.answerCallbackQuery();
-      expectStep(s, 'r.car', a!);
+      await expectStep(s, 'r.car', a!);
       await ctx.reply('سعر اليوم الجديد للسيارة بالدولار:');
       return true;
 
     case 'et':
       await ctx.answerCallbackQuery();
-      expectStep(s, 'r.tour', a!);
+      await expectStep(s, 'r.tour', a!);
       await ctx.reply('سعر الجولة الجديد للمجموعة بالدولار:');
       return true;
 
     case 'es':
       await ctx.answerCallbackQuery();
-      expectStep(s, 'r.service', `${a}|${b}`);
+      await expectStep(s, 'r.service', `${a}|${b}`);
       await ctx.reply(`السعر الجديد لـ «${SERVICE_LABEL[b ?? '']}» بالدولار:`);
       return true;
 
     case 'at':
       await ctx.answerCallbackQuery();
-      expectStep(s, 'r.addTour', a!);
+      await expectStep(s, 'r.addTour', a!);
       await ctx.reply('اكتب اسم الجولة ثم سعرها للمجموعة:\n<code>جولة أوزنجول 90</code>', {
         parse_mode: 'HTML',
       });
       return true;
 
+    case 'ac':
+      await ctx.answerCallbackQuery();
+      await expectStep(s, 'r.addCar', a!);
+      await ctx.reply(
+        'اكتب بيانات السيارة:\n<code>النوع | الاسم | السعر لليوم</code>\n\n' +
+          'النوع: sedan أو van أو vip\n\n' +
+          'مثال:\n<code>van | فان مرسيدس مع سائق | 110</code>',
+        { parse_mode: 'HTML' },
+      );
+      return true;
+
     case 'ah':
       await ctx.answerCallbackQuery();
-      expectStep(s, 'r.addHotel', a!);
+      await expectStep(s, 'r.addHotel', a!);
       await ctx.reply(
-        'اكتب بيانات الفندق:\n<code>الاسم | الفئة | العادي | المرتفع</code>\n\n' +
-          'الفئة: 3 أو 4 أو 5 أو cabin\n\nمثال:\n<code>كوخ كيانا | cabin | 120 | 138</code>',
+        'اكتب بيانات الفندق:\n' +
+          '<code>الاسم | الفئة | العادي | المرتفع | السرير_الثالث</code>\n\n' +
+          'الفئة: 3 أو 4 أو 5 أو cabin\n' +
+          'السرير الثالث اختياري — يُقدَّر بـ 35٪ من سعر الغرفة إن تُرك\n\n' +
+          'مثال:\n<code>كوخ كيانا | cabin | 120 | 138 | 45</code>',
         { parse_mode: 'HTML' },
       );
       return true;

@@ -2,16 +2,17 @@
  * معالج بناء عرض السعر خطوة بخطوة.
  *
  * الحالة كلها في قاعدة البيانات لا في الذاكرة، والخطوة المنتظرة نص مثل
- * `q.nights` يوزّعه `handleQuoteStep`. السبب في `state.ts`.
+ * `q.dates` يوزّعه `handleQuoteStep`. السبب في `state.ts`.
  *
  * الموسم: الفنادق تحمل سعرين حقيقيين (عادي ومرتفع) من عقد المورّد، لذلك يختار
  * البوت السعر المناسب من الصف ويمرّر `season: 'normal'` للمحرك — وإلا حُسب
  * الموسم مرتين. معامل الموسم في المحرك مخصص للحالات التي لا تتوفر فيها أسعار
- * موسمية حقيقية (لوحة التحكم واستخدام يدوي).
+ * موسمية حقيقية.
  */
 import { InlineKeyboard, InputFile, type Context } from 'grammy';
 import {
   threeTiers,
+  planRooms,
   type QuoteInput,
   type Tier,
   type TierOffer,
@@ -27,20 +28,55 @@ import { toOfferDoc, toCardDoc } from '../offerdoc.ts';
 import { offerHtml } from '../templates/offer.ts';
 import { cardHtml, CARD_DIMENSIONS, type CardSize } from '../templates/card.ts';
 import { renderPdf, renderPng } from '../render.ts';
-import { buildDays, splitNights, parseRoute, parsePractical, type Day, type RouteNight, type Practical } from '../itinerary.ts';
+import {
+  buildDays, splitNights, parseRoute, parsePractical,
+  type Day, type RouteNight, type Practical,
+} from '../itinerary.ts';
 
-/** إعدادات ثابتة — تنتقل للوحة التحكم في المرحلة الرابعة. */
+/** إعدادات ثابتة — تنتقل للوحة التحكم لاحقاً. */
 const FEES_BP = 250;
 const DEPOSIT_PCT = 30;
 const ROUND_TO = 1_000; // 10 دولارات
 
 const uid = (ctx: Context) => ctx.from?.id ?? 0;
 
-/* ------------------------------ الخطوة 1 ------------------------------ */
+const AR_MONTHS = [
+  'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+  'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
+];
+
+/** يستخرج تاريخين ويحسب الليالي بينهما. */
+function parseDates(text: string): { depart: string; ret: string; nights: number } | null {
+  const found = text.match(/\d{4}-\d{1,2}-\d{1,2}/g);
+  if (!found || found.length < 2) return null;
+  const toDate = (v: string) => {
+    const [y, m, d] = v.split('-').map(Number);
+    return Date.UTC(y!, m! - 1, d!);
+  };
+  const a = toDate(found[0]!);
+  const b = toDate(found[1]!);
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  const nights = Math.round((b - a) / 86_400_000);
+  if (nights < 1 || nights > 60) return null;
+  return { depart: found[0]!, ret: found[1]!, nights };
+}
+
+/** الموسم يُشتقّ من شهر المغادرة بدل أن يُسأل عنه — سؤال أقل على الموظف. */
+function seasonOf(depart: string): 'normal' | 'high' {
+  const month = Number(depart.split('-')[1]);
+  return month >= 6 && month <= 9 ? 'high' : 'normal';
+}
+
+function monthLabel(depart: string): string {
+  const [y, m] = depart.split('-');
+  return `${AR_MONTHS[Number(m) - 1] ?? m} ${y}`;
+}
+
+/* ------------------------------ الخطوات ------------------------------ */
 
 export async function startQuote(ctx: Context): Promise<void> {
-  resetDraft(uid(ctx));
-  const destinations = db.listDestinations();
+  await resetDraft(uid(ctx));
+  const destinations = await db.listDestinations();
   if (!destinations.length) {
     await ctx.reply('لا توجد وجهات بعد. شغّل «npm run migrate» أولاً.');
     return;
@@ -51,39 +87,42 @@ export async function startQuote(ctx: Context): Promise<void> {
   });
 }
 
-/* ------------------------------ الخطوات ------------------------------ */
-
-async function askNights(ctx: Context, s: Session): Promise<void> {
-  expectStep(s, 'q.nights');
-  await ctx.reply(`الوجهة: <b>${s.draft.destinationName}</b>\n\nكم عدد الليالي؟`, {
-    parse_mode: 'HTML',
-  });
-}
-
-async function askPax(ctx: Context, s: Session): Promise<void> {
-  expectStep(s, 'q.pax');
+async function askDates(ctx: Context, s: Session): Promise<void> {
+  await expectStep(s, 'q.dates');
   await ctx.reply(
-    'كم عدد المسافرين؟\n\nاكتبهم بهذا الترتيب مفصولين بمسافة:\n' +
-      '<code>الكبار الأطفال الرضّع</code>\n\nمثال: <code>2 2 0</code>\n' +
-      'أو اكتب <code>2</code> لبالغين فقط.',
+    `الوجهة: <b>${s.draft.destinationName}</b>\n\n` +
+      'اكتب تاريخ المغادرة وتاريخ العودة:\n' +
+      '<code>2026-07-10 2026-07-16</code>\n\n' +
+      'أحسب الأيام والليالي والموسم منهما.',
     { parse_mode: 'HTML' },
   );
 }
 
-async function askSeason(ctx: Context, s: Session): Promise<void> {
-  clearStep(s);
+async function askAdults(ctx: Context, s: Session): Promise<void> {
+  await expectStep(s, 'q.adults');
+  const d = s.draft;
   await ctx.reply(
-    `${s.draft.adults} بالغ · ${s.draft.children} طفل · ${s.draft.rooms} غرفة\n\nما الموسم؟`,
-    {
-      reply_markup: new InlineKeyboard()
-        .text('عادي', 'q:season:normal')
-        .text('مرتفع — صيف وأعياد', 'q:season:high'),
-    },
+    `<b>${d.nights} ليالٍ / ${d.nights! + 1} أيام</b> · ` +
+      `${d.season === 'high' ? 'موسم مرتفع' : 'موسم عادي'}\n\nكم عدد البالغين؟`,
+    { parse_mode: 'HTML' },
+  );
+}
+
+async function askKids(ctx: Context, s: Session): Promise<void> {
+  await expectStep(s, 'q.kids');
+  await ctx.reply(
+    'كم عدد الأطفال؟ اكتب رقمين:\n' +
+      '<code>أقل_من_6   6_فأكثر</code>\n\n' +
+      'مثال: <code>1 2</code> — طفل دون السادسة وطفلان فوقها.\n' +
+      'اكتب <code>0 0</code> إن لم يكن معكم أطفال.\n\n' +
+      '• دون السادسة: <b>مجاناً</b> — بلا سرير ولا تذكرة\n' +
+      '• من ست فأكثر: سرير إضافي يحوّل الغرفة إلى ثلاثية',
+    { parse_mode: 'HTML' },
   );
 }
 
 async function askTours(ctx: Context, s: Session, edit = false): Promise<void> {
-  const tours = db.listTours(s.draft.destination!);
+  const tours = await db.listTours(s.draft.destination!);
   if (!tours.length) {
     await ctx.reply('لا توجد جولات لهذه الوجهة. أضفها من 💰 الأسعار ثم أعد المحاولة.');
     return;
@@ -96,7 +135,7 @@ async function askTours(ctx: Context, s: Session, edit = false): Promise<void> {
   kb.text('◀️ احسب السعر', 'q:calc');
 
   const text =
-    `<b>اختر الجولات</b>\nاضغط على الجولة لإضافتها أو إزالتها.\n\n` +
+    '<b>اختر الجولات</b>\nاضغط على الجولة لإضافتها أو إزالتها.\n\n' +
     `المختار: ${chosen.size} جولة`;
   if (edit) await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
   else await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
@@ -108,31 +147,60 @@ async function askTours(ctx: Context, s: Session, edit = false): Promise<void> {
  */
 export async function handleQuoteStep(ctx: Context, s: Session, text: string): Promise<boolean> {
   switch (s.step) {
-    case 'q.nights': {
-      const n = parseInt(text.replace(/\D/g, ''), 10);
-      if (!n || n < 1 || n > 30) {
-        await ctx.reply('اكتب رقماً بين 1 و30.');
+    case 'q.dates': {
+      const parsed = parseDates(text);
+      if (!parsed) {
+        await ctx.reply('لم أفهم التاريخين. اكتبهما هكذا:\n<code>2026-07-10 2026-07-16</code>', {
+          parse_mode: 'HTML',
+        });
         return true; // الخطوة باقية — ننتظر إجابة صحيحة
       }
-      s.draft.nights = n;
-      save(s);
-      await askPax(ctx, s);
+      s.draft.departDate = parsed.depart;
+      s.draft.returnDate = parsed.ret;
+      s.draft.nights = parsed.nights;
+      s.draft.season = seasonOf(parsed.depart);
+      s.draft.travelMonth = monthLabel(parsed.depart);
+      await save(s);
+      await askAdults(ctx, s);
       return true;
     }
 
-    case 'q.pax': {
-      const parts = text.trim().split(/[\s،,]+/).map((p) => parseInt(p.replace(/\D/g, ''), 10));
-      const adults = parts[0];
-      if (!adults || adults < 1 || adults > 30) {
-        await ctx.reply('لم أفهم. اكتب مثلاً: <code>2 2 0</code>', { parse_mode: 'HTML' });
+    case 'q.adults': {
+      const n = parseInt(text.replace(/\D/g, ''), 10);
+      if (!n || n < 1 || n > 30) {
+        await ctx.reply('اكتب رقماً بين 1 و30.');
         return true;
       }
-      s.draft.adults = adults;
-      s.draft.children = Number.isFinite(parts[1]) ? parts[1]! : 0;
-      s.draft.infants = Number.isFinite(parts[2]) ? parts[2]! : 0;
-      s.draft.rooms = Math.max(1, Math.ceil(adults / 2));
-      save(s);
-      await askSeason(ctx, s);
+      s.draft.adults = n;
+      await save(s);
+      await askKids(ctx, s);
+      return true;
+    }
+
+    case 'q.kids': {
+      const nums = text.trim().split(/[\s،,]+/).map((p) => parseInt(p.replace(/\D/g, ''), 10));
+      const free = nums[0];
+      const bed = Number.isFinite(nums[1]) ? nums[1]! : 0;
+      if (!Number.isFinite(free) || free! < 0 || bed < 0 || free! > 20 || bed > 20) {
+        await ctx.reply('اكتب رقمين: <code>1 2</code> — أو <code>0 0</code>', {
+          parse_mode: 'HTML',
+        });
+        return true;
+      }
+      s.draft.childrenFree = free!;
+      s.draft.childrenBed = bed;
+      await clearStep(s);
+
+      const plan = planRooms(s.draft.adults!, bed);
+      await ctx.reply(
+        '<b>توزيع الغرف</b>\n' +
+          `${plan.rooms} ${plan.rooms === 1 ? 'غرفة' : 'غرف'}` +
+          (plan.triples ? ` · منها ${plan.triples} ثلاثية بسرير إضافي` : '') +
+          (free ? `\n${free} طفل دون السادسة — مجاناً` : '') +
+          '\n\nالآن اختر الجولات:',
+        { parse_mode: 'HTML' },
+      );
+      await askTours(ctx, s);
       return true;
     }
 
@@ -142,7 +210,7 @@ export async function handleQuoteStep(ctx: Context, s: Session, text: string): P
       const phone = clean.match(/[+\d][\d\s-]{6,}/)?.[0];
       s.draft.customerPhone = skip ? undefined : phone?.replace(/[\s-]/g, '');
       s.draft.customerName = skip ? undefined : clean.replace(phone ?? '', '').trim() || undefined;
-      clearStep(s);
+      await clearStep(s);
       await persist(ctx, s);
       return true;
     }
@@ -167,12 +235,12 @@ interface Built {
   practical: Practical;
 }
 
-function buildOffers(s: Session): Built | null {
+async function buildOffers(s: Session): Promise<Built | null> {
   const d = s.draft;
-  const dest = d.destination ? db.getDestination(d.destination) : undefined;
+  const dest = d.destination ? await db.getDestination(d.destination) : undefined;
   if (!dest || !d.nights || !d.adults) return null;
 
-  const { three, four, five, cabin, all } = db.hotelsByClass(dest.slug);
+  const { three, four, five, cabin, all } = await db.hotelsByClass(dest.slug);
   const fallback = all[0];
   if (!fallback) return null;
 
@@ -181,23 +249,27 @@ function buildOffers(s: Session): Built | null {
     const row = h ?? fallback;
     return high ? row.rate_high : row.rate_normal;
   };
+  const tripleOf = (h: db.Hotel | undefined) => (h ?? fallback).rate_triple;
 
-  const sedan = db.carByKind(dest.slug, 'sedan');
-  const van = db.carByKind(dest.slug, 'van');
-  const vip = db.carByKind(dest.slug, 'vip');
+  const [sedan, van, vip] = await Promise.all([
+    db.carByKind(dest.slug, 'sedan'),
+    db.carByKind(dest.slug, 'van'),
+    db.carByKind(dest.slug, 'vip'),
+  ]);
 
   const chosen = new Set(d.tourIds);
-  const tours = db.listTours(dest.slug).filter((t) => chosen.has(t.id));
+  const tours = (await db.listTours(dest.slug)).filter((t) => chosen.has(t.id));
+  const route = parseRoute(dest.route);
 
   const input: QuoteInput = {
     nights: d.nights,
     adults: d.adults,
-    children: d.children ?? 0,
-    infants: d.infants ?? 0,
-    rooms: d.rooms ?? 1,
+    childrenFree: d.childrenFree ?? 0,
+    childrenBed: d.childrenBed ?? 0,
     // الموسم مطبّق في سعر الفندق المختار أعلاه — لا يُطبّق مرتين
     season: 'normal',
     hotelRate: rateOf(four),
+    tripleExtra: tripleOf(four),
     hotelNights: d.nights,
     carRate: van?.rate_day ?? 0,
     carDays: Math.max(0, d.nights - 1),
@@ -214,13 +286,21 @@ function buildOffers(s: Session): Built | null {
     feesBp: FEES_BP,
     depositPct: DEPOSIT_PCT,
     roundTo: ROUND_TO,
-    childFreeInRoom: false,
   };
 
   const rates: Record<Tier, TierRates> = {
-    economy: { hotelRate: rateOf(three), carRate: sedan?.rate_day ?? 0, guideIncluded: false, hotelName: (three ?? fallback).name },
-    premium: { hotelRate: rateOf(four), carRate: van?.rate_day ?? 0, guideIncluded: false, hotelName: (four ?? fallback).name },
-    vip: { hotelRate: rateOf(five ?? cabin), carRate: vip?.rate_day ?? 0, guideIncluded: true, hotelName: (five ?? cabin ?? fallback).name },
+    economy: {
+      hotelRate: rateOf(three), tripleExtra: tripleOf(three),
+      carRate: sedan?.rate_day ?? 0, guideIncluded: false, hotelName: (three ?? fallback).name,
+    },
+    premium: {
+      hotelRate: rateOf(four), tripleExtra: tripleOf(four),
+      carRate: van?.rate_day ?? 0, guideIncluded: false, hotelName: (four ?? fallback).name,
+    },
+    vip: {
+      hotelRate: rateOf(five ?? cabin), tripleExtra: tripleOf(five ?? cabin),
+      carRate: vip?.rate_day ?? 0, guideIncluded: true, hotelName: (five ?? cabin ?? fallback).name,
+    },
   };
 
   return {
@@ -230,8 +310,8 @@ function buildOffers(s: Session): Built | null {
     heroImage: dest.hero_image,
     gallery: db.galleryOf(dest),
     imageCredits: dest.image_credits,
-    itinerary: buildDays(d.nights, tours, parseRoute(dest.route)),
-    route: splitNights(parseRoute(dest.route), d.nights),
+    itinerary: buildDays(d.nights, tours, route),
+    route: splitNights(route, d.nights),
     practical: parsePractical(dest.practical),
     hotelClasses: {
       economy: (three ?? fallback).class,
@@ -250,9 +330,9 @@ function buildDoc(s: Session, built: Built) {
     nights: d.nights!,
     travelers: {
       adults: d.adults!,
-      children: d.children ?? 0,
-      infants: d.infants ?? 0,
-      rooms: d.rooms ?? 1,
+      childrenFree: d.childrenFree ?? 0,
+      childrenBed: d.childrenBed ?? 0,
+      rooms: planRooms(d.adults!, d.childrenBed ?? 0).rooms,
     },
     offers: built.offers,
     hotelClasses: built.hotelClasses,
@@ -272,7 +352,7 @@ function buildDoc(s: Session, built: Built) {
 }
 
 async function showResult(ctx: Context, s: Session): Promise<void> {
-  const built = buildOffers(s);
+  const built = await buildOffers(s);
   if (!built) {
     await ctx.reply('تعذّر الحساب — لا توجد فنادق مسجّلة لهذه الوجهة. أضفها من 💰 الأسعار.');
     return;
@@ -280,27 +360,32 @@ async function showResult(ctx: Context, s: Session): Promise<void> {
   const kb = new InlineKeyboard()
     .text('📄 ملف PDF', 'q:pdf')
     .text('🖼️ صورة', 'q:img').row()
-    .text('💬 نص للواتساب', 'q:text').row()
+    .text('📝 البرنامج كتابياً', 'q:prog').row()
+    .text('💬 نص مختصر للواتساب', 'q:text').row()
     .text('🔍 تفصيل داخلي', 'q:detail').row()
     .text('💾 احفظ العرض', 'q:save')
     .text('✖️ إلغاء', 'q:cancel');
 
+  const plan = planRooms(s.draft.adults!, s.draft.childrenBed ?? 0);
   await ctx.reply(
-    tiersSummary(built.offers, s.draft.nights!, s.draft.adults!, s.draft.children ?? 0) +
-      `\n\n<i>${s.draft.destinationName} · ${s.draft.season === 'high' ? 'موسم مرتفع' : 'موسم عادي'}</i>`,
+    tiersSummary(built.offers, s.draft.nights!, s.draft.adults!, s.draft.childrenBed ?? 0) +
+      `\n\n<i>${s.draft.destinationName} · ${s.draft.travelMonth ?? ''} · ` +
+      `${plan.rooms} ${plan.rooms === 1 ? 'غرفة' : 'غرف'}` +
+      (plan.triples ? ` (${plan.triples} ثلاثية)` : '') +
+      '</i>',
     { parse_mode: 'HTML', reply_markup: kb },
   );
 }
 
 async function persist(ctx: Context, s: Session): Promise<void> {
-  const built = buildOffers(s);
+  const built = await buildOffers(s);
   if (!built) {
     await ctx.reply('تعذّر الحفظ — أعد الحساب.');
     return;
   }
   const chosen = built.offers.find((o) => o.tier === 'premium') ?? built.offers[0]!;
-  const serial = db.nextSerial();
-  const row = db.saveQuote({
+  const serial = await db.nextSerial();
+  const row = await db.saveQuote({
     serial,
     createdBy: uid(ctx),
     destination: s.draft.destination!,
@@ -316,22 +401,52 @@ async function persist(ctx: Context, s: Session): Promise<void> {
   });
   s.draft.savedId = row.id;
   s.draft.savedSerial = serial;
-  save(s);
+  await save(s);
 
   await ctx.reply(
     `✅ حُفظ العرض <b>${serial}</b>\n\n` +
       `${s.draft.destinationName} · ${fmt(chosen.sell)} · ربح ${fmt(chosen.profit)}\n` +
       `${s.draft.customerName ? `الزبون: ${s.draft.customerName}\n` : ''}` +
-      `\nاضغط 📄 أو 🖼️ لإرسال المستند للزبون.`,
+      '\nاضغط 📄 أو 🖼️ لإرسال المستند للزبون.',
     { parse_mode: 'HTML' },
   );
+}
+
+/** البرنامج كتابياً — نص كامل يُنسخ ويُعدَّل قبل الإرسال. */
+function programText(s: Session, built: Built): string {
+  const d = s.draft;
+  const chosen = built.offers.find((o) => o.tier === 'premium') ?? built.offers[0]!;
+  const plan = planRooms(d.adults!, d.childrenBed ?? 0);
+  const lines: (string | null)[] = [
+    `🌿 ${d.destinationName} — ${d.nights! + 1} أيام / ${d.nights} ليالٍ`,
+    d.departDate ? `التواريخ: ${d.departDate} إلى ${d.returnDate}` : null,
+    `المسافرون: ${d.adults} بالغ` +
+      (d.childrenBed ? ` · ${d.childrenBed} طفل (6 فأكثر)` : '') +
+      (d.childrenFree ? ` · ${d.childrenFree} طفل دون السادسة مجاناً` : ''),
+    `الغرف: ${plan.rooms}` + (plan.triples ? ` — منها ${plan.triples} ثلاثية` : ''),
+    '',
+    '— البرنامج يوماً بيوم —',
+  ];
+  for (const day of built.itinerary) {
+    lines.push('');
+    lines.push(`اليوم ${day.n}: ${day.title}`);
+    lines.push(day.body);
+    if (day.sleep) lines.push(`المبيت في ${day.sleep}`);
+  }
+  lines.push('');
+  lines.push('— الأسعار —');
+  for (const o of built.offers) lines.push(`${o.label}: ${fmt(o.sell)} — ${o.hotelName ?? ''}`);
+  lines.push('');
+  lines.push(`العربون ${DEPOSIT_PCT}٪ = ${fmt(chosen.deposit)}`);
+  lines.push('المسافرون العرب — بضيافة عربية');
+  return lines.filter((l) => l !== null).join('\n');
 }
 
 /* ------------------------------ التوجيه ------------------------------ */
 
 /** يعالج كل أزرار `q:*`. يعيد true إن كان الزر يخصّه. */
 export async function handleQuoteCallback(ctx: Context, parts: string[]): Promise<boolean> {
-  const s = getSession(uid(ctx));
+  const s = await getSession(uid(ctx));
   const [, action, value] = parts;
 
   const needDraft = async (): Promise<boolean> => {
@@ -342,22 +457,13 @@ export async function handleQuoteCallback(ctx: Context, parts: string[]): Promis
 
   switch (action) {
     case 'dest': {
-      const dest = db.getDestination(value ?? '');
+      const dest = await db.getDestination(value ?? '');
       if (!dest) return answer(ctx, 'وجهة غير معروفة');
       s.draft.destination = dest.slug;
       s.draft.destinationName = dest.name;
-      save(s);
+      await save(s);
       await ctx.answerCallbackQuery();
-      await askNights(ctx, s);
-      return true;
-    }
-
-    case 'season': {
-      if (!(await needDraft())) return true;
-      s.draft.season = value === 'high' ? 'high' : 'normal';
-      save(s);
-      await ctx.answerCallbackQuery();
-      await askTours(ctx, s);
+      await askDates(ctx, s);
       return true;
     }
 
@@ -368,7 +474,7 @@ export async function handleQuoteCallback(ctx: Context, parts: string[]): Promis
       if (set.has(id)) set.delete(id);
       else set.add(id);
       s.draft.tourIds = [...set];
-      save(s);
+      await save(s);
       await ctx.answerCallbackQuery();
       await askTours(ctx, s, true);
       return true;
@@ -383,7 +489,7 @@ export async function handleQuoteCallback(ctx: Context, parts: string[]): Promis
 
     case 'detail': {
       if (!(await needDraft())) return true;
-      const built = buildOffers(s);
+      const built = await buildOffers(s);
       if (!built) return answer(ctx, 'تعذّر الحساب');
       await ctx.answerCallbackQuery();
       for (const offer of built.offers) {
@@ -392,20 +498,30 @@ export async function handleQuoteCallback(ctx: Context, parts: string[]): Promis
       return true;
     }
 
-    case 'text': {
+    case 'prog': {
       if (!(await needDraft())) return true;
-      const built = buildOffers(s);
+      const built = await buildOffers(s);
       if (!built) return answer(ctx, 'تعذّر الحساب');
       await ctx.answerCallbackQuery();
-      // بلا parse_mode حتى ينسخه المستخدم كما هو إلى واتساب
+      // بلا parse_mode حتى يُنسخ كما هو ويُعدَّل قبل الإرسال
+      await ctx.reply(programText(s, built));
+      await ctx.reply('انسخ البرنامج وعدّله كما تشاء قبل إرساله.');
+      return true;
+    }
+
+    case 'text': {
+      if (!(await needDraft())) return true;
+      const built = await buildOffers(s);
+      if (!built) return answer(ctx, 'تعذّر الحساب');
+      await ctx.answerCallbackQuery();
       await ctx.reply(
         customerOffer({
           destinationName: s.draft.destinationName!,
           nights: s.draft.nights!,
           adults: s.draft.adults!,
-          children: s.draft.children ?? 0,
-          infants: s.draft.infants ?? 0,
-          rooms: s.draft.rooms ?? 1,
+          childrenFree: s.draft.childrenFree ?? 0,
+          childrenBed: s.draft.childrenBed ?? 0,
+          rooms: planRooms(s.draft.adults!, s.draft.childrenBed ?? 0).rooms,
           tourNames: built.tourNames,
           offers: built.offers,
           depositPct: DEPOSIT_PCT,
@@ -421,7 +537,7 @@ export async function handleQuoteCallback(ctx: Context, parts: string[]): Promis
     case 'pdf':
     case 'img': {
       if (!(await needDraft())) return true;
-      const built = buildOffers(s);
+      const built = await buildOffers(s);
       if (!built) return answer(ctx, 'تعذّر الحساب');
       await ctx.answerCallbackQuery();
       const wait = await ctx.reply('جارٍ التوليد…');
@@ -430,7 +546,7 @@ export async function handleQuoteCallback(ctx: Context, parts: string[]): Promis
         if (action === 'pdf') {
           const pdf = await renderPdf(offerHtml(doc));
           await ctx.replyWithDocument(new InputFile(pdf, `${doc.serial}.pdf`), {
-            caption: `عرض ${doc.destinationName} — ${doc.days} أيام`,
+            caption: `${doc.destinationName} — ${doc.days} أيام`,
           });
         } else {
           const size: CardSize = 'square';
@@ -451,13 +567,13 @@ export async function handleQuoteCallback(ctx: Context, parts: string[]): Promis
     case 'save': {
       if (!(await needDraft())) return true;
       await ctx.answerCallbackQuery();
-      expectStep(s, 'q.customer');
+      await expectStep(s, 'q.customer');
       await ctx.reply('اسم الزبون ورقمه (أو اكتب <code>-</code> للتخطي):', { parse_mode: 'HTML' });
       return true;
     }
 
     case 'cancel': {
-      dropSession(uid(ctx));
+      await dropSession(uid(ctx));
       await ctx.answerCallbackQuery('أُلغي');
       await ctx.reply('أُلغي العرض.');
       return true;

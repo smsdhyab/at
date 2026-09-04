@@ -33,7 +33,7 @@ const seedIds = (process.env.ALLOWED_IDS ?? '')
   .split(/[,\s]+/)
   .map((s) => Number(s.trim()))
   .filter((n) => Number.isFinite(n) && n > 0);
-for (const id of seedIds) db.addUser(id, null, null);
+for (const id of seedIds) await db.addUser(id, null, null);
 
 const bot = new Bot(token);
 
@@ -74,21 +74,21 @@ bot.use(async (ctx, next) => {
   const from = ctx.from;
   if (!from) return;
 
-  const existing = db.getUser(from.id);
+  const existing = await db.getUser(from.id);
 
   if (existing?.role === 'blocked') return;
 
   if (!existing) {
-    if (!db.isOpenAccess()) {
+    if (!(await db.isOpenAccess())) {
       console.warn(`محاولة وصول مرفوضة من ${from.id} (${from.username ?? 'بلا معرّف'})`);
       return;
     }
     const name = [from.first_name, from.last_name].filter(Boolean).join(' ') || null;
-    db.addUser(from.id, name, from.username ?? null);
+    await db.addUser(from.id, name, from.username ?? null);
     console.log(`مستخدم جديد: ${from.id} — ${name ?? 'بلا اسم'} (@${from.username ?? '—'})`);
 
     // إشعار بقية المشرفين — الوصول مفتوح، فيجب أن يعرفوا من دخل
-    for (const u of db.listUsers()) {
+    for (const u of await db.listUsers()) {
       if (u.telegram_id === from.id || u.role !== 'admin') continue;
       await bot.api
         .sendMessage(
@@ -108,7 +108,7 @@ bot.use(async (ctx, next) => {
 /* ------------------------------ الشاشات ------------------------------ */
 
 async function showRecent(ctx: Context) {
-  const rows = db.listRecentQuotes(ctx.from!.id, 10);
+  const rows = await db.listRecentQuotes(ctx.from!.id, 10);
   if (!rows.length) {
     await ctx.reply(`لا توجد عروض بعد. اضغط «${BTN.quote}» للبدء.`, { reply_markup: menu });
     return;
@@ -128,7 +128,7 @@ async function showRecent(ctx: Context) {
 }
 
 async function showStats(ctx: Context) {
-  const s = db.stats(30);
+  const s = await db.stats(30);
   const rate = s.count ? Math.round((s.won / s.count) * 100) : 0;
   await ctx.reply(
     [
@@ -144,8 +144,8 @@ async function showStats(ctx: Context) {
 }
 
 async function showSettings(ctx: Context, edit = false) {
-  const open = db.isOpenAccess();
-  const users = db.listUsers();
+  const open = await db.isOpenAccess();
+  const users = await db.listUsers();
   const kb = new InlineKeyboard()
     .text(open ? '🔓 الوصول مفتوح — اضغط للإغلاق' : '🔒 الوصول مغلق — اضغط للفتح', 's:toggle').row()
     .text(`👥 المستخدمون (${users.length})`, 's:users');
@@ -168,7 +168,7 @@ async function showSettings(ctx: Context, edit = false) {
 
 bot.command(['start', 'help'], (ctx) => showMenu(ctx));
 bot.command('cancel', async (ctx) => {
-  dropSession(ctx.from!.id);
+  await dropSession(ctx.from!.id);
   await showMenu(ctx, 'أُلغي.');
 });
 bot.command('quote', startQuote);
@@ -185,15 +185,14 @@ bot.on('callback_query:data', async (ctx) => {
 
   if (parts[0] === 's') {
     if (parts[1] === 'toggle') {
-      const now = !db.isOpenAccess();
-      db.setSetting('open_access', now ? '1' : '0');
+      const now = !(await db.isOpenAccess());
+      await db.setSetting('open_access', now ? '1' : '0');
       await ctx.answerCallbackQuery(now ? 'فُتح الوصول' : 'أُغلق الوصول');
       await showSettings(ctx, true);
       return;
     }
     if (parts[1] === 'users') {
-      const list = db
-        .listUsers()
+      const list = (await db.listUsers())
         .map((u) => `• ${u.name ?? 'بلا اسم'}${u.username ? ` (@${u.username})` : ''} — <code>${u.telegram_id}</code>`)
         .join('\n');
       await ctx.answerCallbackQuery();
@@ -216,15 +215,15 @@ bot.on('message:text', async (ctx) => {
 
   // زر القائمة يقطع أي خطوة جارية — الضغط عليه يعني تبديل المسار
   switch (text) {
-    case BTN.quote:    dropSession(ctx.from.id); return void (await startQuote(ctx));
-    case BTN.rates:    dropSession(ctx.from.id); return void (await startRates(ctx));
+    case BTN.quote:    await dropSession(ctx.from.id); return void (await startQuote(ctx));
+    case BTN.rates:    await dropSession(ctx.from.id); return void (await startRates(ctx));
     case BTN.recent:   return void (await showRecent(ctx));
     case BTN.stats:    return void (await showStats(ctx));
     case BTN.settings: return void (await showSettings(ctx));
   }
 
   // خطوة منتظرة؟ توزَّع على معالجها حسب بادئة اسمها
-  const session = getSession(ctx.from.id);
+  const session = await getSession(ctx.from.id);
   if (session.step) {
     const handled = session.step.startsWith('q.')
       ? await handleQuoteStep(ctx, session, text)
@@ -261,13 +260,14 @@ await bot.api.setMyCommands([
 const me = await bot.api.getMe();
 console.log(
   `البوت يعمل: @${me.username}\n` +
-    `المستخدمون: ${db.listUsers().length} · الوصول: ${db.isOpenAccess() ? 'مفتوح للجميع' : 'مغلق'}`,
+    `المستخدمون: ${(await db.listUsers()).length} · ` +
+    `الوصول: ${(await db.isOpenAccess()) ? 'مفتوح للجميع' : 'مغلق'}`,
 );
 
 const stop = async () => {
   console.log('\nإيقاف…');
   await bot.stop();
-  db.close();
+  await db.close();
   process.exit(0);
 };
 process.once('SIGINT', stop);

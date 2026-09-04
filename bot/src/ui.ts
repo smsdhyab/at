@@ -55,8 +55,8 @@ export function customerOffer(args: {
   destinationName: string;
   nights: number;
   adults: number;
-  children: number;
-  infants: number;
+  childrenFree: number;
+  childrenBed: number;
   rooms: number;
   tourNames: string[];
   offers: TierOffer[];
@@ -68,8 +68,8 @@ export function customerOffer(args: {
   const days = args.nights + 1;
   const pax =
     `${args.adults} بالغ` +
-    (args.children ? ` و${args.children} طفل` : '') +
-    (args.infants ? ` و${args.infants} رضيع` : '');
+    (args.childrenBed ? ` و${args.childrenBed} طفل` : '') +
+    (args.childrenFree ? ` و${args.childrenFree} طفل دون السادسة` : '');
   const chosen = args.offers.find((o) => o.tier === 'premium') ?? args.offers[0];
 
   const out: (string | null)[] = [

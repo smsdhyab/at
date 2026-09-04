@@ -29,7 +29,7 @@ export interface OfferDocInput {
   serial: string;
   destinationName: string;
   nights: number;
-  travelers: { adults: number; children: number; infants: number; rooms: number };
+  travelers: { adults: number; childrenFree: number; childrenBed: number; rooms: number };
   offers: TierOffer[];
   /** فئة الفندق لكل مستوى: economy → '3' وهكذا. */
   hotelClasses: Partial<Record<Tier, string>>;

@@ -1,162 +1,132 @@
 /**
- * فحص تكاملي: قاعدة بيانات حقيقية في الذاكرة، بالمخطط والبيانات الابتدائية نفسها.
- * يمرّ على المسار الذي يسلكه البوت فعلاً — من قراءة الأسعار إلى حفظ العرض.
+ * فحص تكاملي على قاعدة Supabase الحقيقية.
+ *
+ * الفحوصات قرائية في أغلبها. ما يكتب منها يستعمل معرّفات فحص مخصصة وينظّف
+ * نفسه في `after` — لا يترك أثراً في بيانات العمل.
+ *
+ * يتخطّى نفسه إن لم يوجد DATABASE_URL حتى لا تفشل الفحوصات على جهاز بلا إعداد.
  */
-import { test, before, after } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { threeTiers, type QuoteInput, type Tier, type TierRates } from './pricing.ts';
 
-// لا بد من ضبط الملف قبل استيراد db.ts لأنه يفتح القاعدة عند الاستيراد
-process.env.DB_FILE = ':memory:';
-const db = await import('./db.ts');
+const hasDb = Boolean(process.env.DATABASE_URL);
+const skip = hasDb ? false : 'لا يوجد DATABASE_URL — فحص القاعدة متخطّى';
 
-const migrations = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
+const db = hasDb ? await import('./db.ts') : null;
 
-before(() => {
-  for (const f of readdirSync(migrations).filter((f) => f.endsWith('.sql')).sort()) {
-    db.db.exec(readFileSync(join(migrations, f), 'utf8'));
-  }
+/** معرّف تليغرام وهمي للفحص — خارج نطاق المعرّفات الحقيقية. */
+const TEST_UID = 900_000_001;
+const TEST_SERIAL = 'TEST-DO-NOT-USE';
+
+after(async () => {
+  if (!db) return;
+  await db.sql`delete from quotes where serial = ${TEST_SERIAL}`;
+  await db.sql`delete from customers where name = 'زبون فحص'`;
+  await db.sql`delete from sessions where telegram_id = ${TEST_UID}`;
+  await db.close();
 });
 
-after(() => db.close());
-
-test('الوجهات الأربع مزروعة وبأسعار خدمات', () => {
-  const dests = db.listDestinations();
+test('الوجهات الأربع موجودة بأسعار خدمات', { skip }, async () => {
+  const dests = await db!.listDestinations();
   assert.equal(dests.length, 4);
-  assert.deepEqual(
-    dests.map((d) => d.slug),
-    ['north', 'istanbul', 'cappadocia', 'antalya'],
-  );
-  const north = db.getDestination('north');
-  assert.equal(north?.transfer_rate, 4_500);
-  assert.equal(north?.ticket_pp, 1_200);
-  assert.equal(north?.guide_rate, 7_000);
+  assert.deepEqual(dests.map((d) => d.slug), ['north', 'istanbul', 'cappadocia', 'antalya']);
+
+  const north = await db!.getDestination('north');
+  assert.ok(north);
+  assert.ok(north.transfer_rate > 0 && north.ticket_pp > 0 && north.guide_rate > 0);
 });
 
-test('كل وجهة لها فندق في كل فئة وسيارة من كل نوع', () => {
-  for (const dest of db.listDestinations()) {
-    const { three, four, five } = db.hotelsByClass(dest.slug);
+test('كل وجهة كاملة: فنادق الفئات الثلاث وسيارات وجولات وصور', { skip }, async () => {
+  for (const dest of await db!.listDestinations()) {
+    const { three, four, five } = await db!.hotelsByClass(dest.slug);
     assert.ok(three && four && five, `${dest.slug}: تنقصه فئة فندق`);
     assert.ok(three.rate_normal < four.rate_normal, `${dest.slug}: 3 نجوم ليست أرخص من 4`);
     assert.ok(four.rate_normal < five.rate_normal, `${dest.slug}: 4 نجوم ليست أرخص من 5`);
     assert.ok(four.rate_high > four.rate_normal, `${dest.slug}: سعر الموسم المرتفع ليس أعلى`);
 
     for (const kind of ['sedan', 'van', 'vip']) {
-      assert.ok(db.carByKind(dest.slug, kind), `${dest.slug}: تنقصه سيارة ${kind}`);
+      assert.ok(await db!.carByKind(dest.slug, kind), `${dest.slug}: تنقصه سيارة ${kind}`);
     }
-    assert.ok(db.listTours(dest.slug).length >= 4, `${dest.slug}: جولاته أقل من أربع`);
+
+    const tours = await db!.listTours(dest.slug);
+    assert.ok(tours.length >= 4, `${dest.slug}: جولاته أقل من أربع`);
+    assert.ok(tours.every((t) => t.description), `${dest.slug}: جولة بلا وصف تُفرغ البرنامج اليومي`);
+
+    assert.ok(dest.hero_image, `${dest.slug}: بلا صورة غلاف`);
+    assert.ok(db!.galleryOf(dest).length >= 3, `${dest.slug}: معرضه أقل من ثلاث صور`);
+    assert.ok(JSON.parse(dest.route).length > 0, `${dest.slug}: بلا مسار مدن`);
   }
 });
 
-test('المسار الكامل: أسعار القاعدة ← ثلاثة عروض ← حفظ ← قراءة', () => {
-  const dest = db.getDestination('north')!;
-  const { three, four, five } = db.hotelsByClass('north');
-  const tours = db.listTours('north').slice(0, 3);
+test('كل المبالغ في القاعدة أعداد صحيحة', { skip }, async () => {
+  const rows = await db!.sql<{ n: string }[]>`
+    select count(*) as n from hotels
+    where rate_normal <> trunc(rate_normal) or rate_high <> trunc(rate_high)`;
+  assert.equal(Number(rows[0]!.n), 0, 'مبلغ كسري تسرّب إلى جدول الفنادق');
+});
 
-  const input: QuoteInput = {
-    nights: 6,
-    adults: 2,
-    children: 2,
-    infants: 0,
-    rooms: 1,
-    season: 'normal',
-    hotelRate: four!.rate_high,
-    hotelNights: 6,
-    carRate: db.carByKind('north', 'van')!.rate_day,
-    carDays: 5,
-    transfers: 2,
-    transferRate: dest.transfer_rate,
-    tours: tours.map((t) => ({ name: t.name, price: t.price })),
-    ticketPerPerson: dest.ticket_pp,
-    guideDays: 0,
-    guideRate: dest.guide_rate,
-    simPerPerson: 0,
-    dinnerPerPerson: 0,
-    miscTotal: 0,
-    marginPct: 22,
-    feesBp: 250,
-    depositPct: 30,
-    roundTo: 1_000,
-    childFreeInRoom: false,
+test('حفظ عرض وقراءته ثم حذفه', { skip }, async () => {
+  const input = {
+    nights: 6, adults: 2, childrenFree: 0, childrenBed: 0, season: 'normal' as const,
+    hotelRate: 9_775, tripleExtra: 3_400, hotelNights: 6, carRate: 9_500, carDays: 5,
+    transfers: 2, transferRate: 4_500, tours: [], ticketPerPerson: 1_200,
+    guideDays: 0, guideRate: 7_000, simPerPerson: 0, dinnerPerPerson: 0, miscTotal: 0,
+    marginPct: 22, feesBp: 250, depositPct: 30, roundTo: 1_000,
   };
-
-  const rates: Record<Tier, TierRates> = {
-    economy: { hotelRate: three!.rate_high, carRate: db.carByKind('north', 'sedan')!.rate_day, guideIncluded: false },
-    premium: { hotelRate: four!.rate_high, carRate: db.carByKind('north', 'van')!.rate_day, guideIncluded: false },
-    vip: { hotelRate: five!.rate_high, carRate: db.carByKind('north', 'vip')!.rate_day, guideIncluded: true },
-  };
-  const offers = threeTiers(input, rates);
-  const premium = offers.find((o) => o.tier === 'premium')!;
-
-  assert.ok(premium.sell > premium.cost, 'سعر البيع لا يغطي التكلفة');
-  assert.ok(offers[0]!.sell < offers[1]!.sell && offers[1]!.sell < offers[2]!.sell);
-
-  const serial = db.nextSerial();
-  assert.match(serial, /^AT-\d{4}-0001$/);
-
-  const row = db.saveQuote({
-    serial,
-    createdBy: 12345,
-    destination: 'north',
-    season: 'high',
-    travelMonth: '2026-07',
-    customerName: 'أبو محمد',
-    customerPhone: '+966500000000',
-    input,
-    tiers: offers,
-    chosenTier: 'premium',
-    cost: premium.cost,
-    sell: premium.sell,
+  const row = await db!.saveQuote({
+    serial: TEST_SERIAL, createdBy: TEST_UID, destination: 'north', season: 'normal',
+    travelMonth: null, customerName: 'زبون فحص', customerPhone: null,
+    input, tiers: [{ tier: 'premium' }], chosenTier: 'premium', cost: 100_000, sell: 130_000,
   });
-
-  assert.equal(row.serial, serial);
-  assert.equal(row.sell, premium.sell);
+  assert.equal(row.serial, TEST_SERIAL);
+  assert.equal(row.sell, 130_000);
   assert.equal(row.status, 'draft');
 
-  const back = db.getQuote(row.id)!;
-  assert.equal(back.customer_name, 'أبو محمد');
+  const back = await db!.getQuote(row.id);
+  assert.equal(back?.customer_name, 'زبون فحص');
   // المدخلات تعود كما دخلت تماماً — يمكن إعادة الحساب بلا تخمين
-  assert.deepEqual(JSON.parse(back.input), JSON.parse(JSON.stringify(input)));
+  assert.deepEqual(JSON.parse(back!.input), JSON.parse(JSON.stringify(input)));
 
-  const recent = db.listRecentQuotes(12345);
-  assert.equal(recent.length, 1);
-  assert.equal(recent[0]!.serial, serial);
-
-  // الأرقام التسلسلية لا تتكرر
-  assert.match(db.nextSerial(), /^AT-\d{4}-0002$/);
+  const recent = await db!.listRecentQuotes(TEST_UID);
+  assert.ok(recent.some((q) => q.serial === TEST_SERIAL));
 });
 
-test('التقارير تحسب الربح ونسبة النجاح', () => {
-  const before = db.stats(30);
-  assert.equal(before.count, 1);
-  assert.equal(before.won, 0);
-  assert.ok(before.profit > 0);
-
-  const [q] = db.listRecentQuotes(12345);
-  db.setQuoteStatus(q!.id, 'won');
-  assert.equal(db.stats(30).won, 1);
+test('الأرقام التسلسلية لا تتكرر', { skip }, async () => {
+  const a = await db!.nextSerial();
+  const b = await db!.nextSerial();
+  assert.notEqual(a, b);
+  assert.match(a, /^AT-\d{4}-\d{4}$/);
 });
 
-test('تعديل الأسعار يُحفظ فعلاً', () => {
-  const [hotel] = db.listHotels('north');
-  db.setHotelRates(hotel!.id, 9_900, 11_000);
-  const after = db.listHotels('north').find((h) => h.id === hotel!.id)!;
-  assert.equal(after.rate_normal, 9_900);
-  assert.equal(after.rate_high, 11_000);
+test('حالة المحادثة تنجو من قراءة جديدة', { skip }, async () => {
+  const st = await import('./state.ts');
+  const s = await st.resetDraft(TEST_UID);
+  s.draft.destination = 'north';
+  s.draft.nights = 6;
+  s.draft.tourIds = [3, 7];
+  await st.save(s);
+  await st.expectStep(s, 'r.hotel', '42');
 
-  db.addTour('north', 'جولة تجريبية', 8_800);
-  assert.ok(db.listTours('north').some((t) => t.name === 'جولة تجريبية' && t.price === 8_800));
+  // قراءة جديدة تماماً — كما يحدث في كل رسالة على بيئة بلا خادم
+  const again = await st.getSession(TEST_UID);
+  assert.equal(again.draft.destination, 'north');
+  assert.deepEqual(again.draft.tourIds, [3, 7]);
+  assert.equal(again.step, 'r.hotel');
+  assert.equal(again.arg, '42');
 
-  db.setDestinationRate('north', 'ticket_pp', 1_500);
-  assert.equal(db.getDestination('north')!.ticket_pp, 1_500);
+  await st.clearStep(again);
+  const third = await st.getSession(TEST_UID);
+  assert.equal(third.step, null);
+  assert.equal(third.draft.nights, 6, 'مسح الخطوة أتلف المسودة');
+
+  await st.dropSession(TEST_UID);
+  assert.equal((await st.getSession(TEST_UID)).draft.destination, undefined);
 });
 
-test('اسم عمود غير مسموح يُرفض ولا يصل إلى الاستعلام', () => {
+test('اسم عمود غير مسموح يُرفض ولا يصل إلى الاستعلام', { skip }, () => {
+  // الرفض يقع قبل بناء الاستعلام أصلاً، فهو رمي متزامن لا وعد مرفوض
   assert.throws(
-    () => db.setDestinationRate('north', 'name = 1; drop table quotes; --' as never, 1),
+    () => db!.setDestinationRate('north', 'name = 1; drop table quotes; --' as never, 1),
     /عمود غير مسموح/,
   );
 });

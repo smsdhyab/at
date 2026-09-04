@@ -37,13 +37,16 @@ export interface Tour {
 export interface QuoteInput {
   nights: number;
   adults: number;
-  children: number;
-  infants: number;
-  rooms: number;
+  /** أطفال أقل من 6 سنوات — مجاناً تماماً: بلا سرير ولا تذكرة ولا خدمة فردية. */
+  childrenFree: number;
+  /** أطفال 6 سنوات فأكثر — يحتاجون سريراً إضافياً وتُحتسب عليهم التذاكر. */
+  childrenBed: number;
   season: Season;
 
   /** سعر الغرفة لليلة الواحدة، بالسنت. */
   hotelRate: number;
+  /** فرق السرير الثالث لليلة الواحدة، بالسنت. */
+  tripleExtra: number;
   hotelNights: number;
   hotelName?: string;
 
@@ -75,9 +78,36 @@ export interface QuoteInput {
   depositPct: number;
   /** يُقرَّب سعر البيع لأعلى إلى مضاعف هذا المبلغ بالسنت. 0 أو 1 = بلا تقريب. */
   roundTo: number;
+}
 
-  /** الطفل الأول لا يُحتسب عليه سرير ولا تذكرة. */
-  childFreeInRoom: boolean;
+export interface RoomPlan {
+  /** عدد الغرف المطلوبة. */
+  rooms: number;
+  /** كم غرفة منها ثلاثية (فيها سرير إضافي لطفل). */
+  triples: number;
+  /** من تُحتسب عليهم التذاكر والخدمات الفردية. */
+  payingPax: number;
+}
+
+/**
+ * توزيع الغرف.
+ *
+ * البالغون يتقاسمون غرفاً مزدوجة. كل طفل من ست سنوات فأكثر يحوّل غرفة مزدوجة
+ * إلى ثلاثية بسرير إضافي — وهذا أرخص للزبون من غرفة كاملة. فإن زاد عدد هؤلاء
+ * الأطفال عن عدد الغرف المتاحة، يُفتح لهم غرف إضافية.
+ *
+ * من هم دون السادسة لا يدخلون الحساب إطلاقاً: لا سرير ولا تذكرة ولا خدمة.
+ */
+export function planRooms(adults: number, childrenBed: number): RoomPlan {
+  const a = Math.max(1, Math.floor(adults) || 0);
+  const kids = Math.max(0, Math.floor(childrenBed) || 0);
+
+  const baseRooms = Math.ceil(a / 2);
+  const triples = Math.min(kids, baseRooms);
+  const leftover = kids - triples;
+  const extraRooms = Math.ceil(leftover / 2);
+
+  return { rooms: baseRooms + extraRooms, triples, payingPax: a + kids };
 }
 
 export interface QuoteLine {
@@ -89,6 +119,8 @@ export interface QuoteLine {
 
 export interface QuoteResult {
   lines: QuoteLine[];
+  /** توزيع الغرف الذي بُني عليه السعر. */
+  plan: RoomPlan;
   /** إجمالي التكلفة على الشركة. */
   cost: number;
   /** الزيادة فوق التكلفة (الهامش). */
@@ -125,15 +157,14 @@ function nonNeg(n: number): number {
 /**
  * يحسب عرض سعر واحداً.
  *
- * الرضّع لا يُحتسب عليهم تذاكر ولا خدمات فردية.
- * الطفل الأول مجاني في الغرفة عند تفعيل `childFreeInRoom`.
+ * الأطفال دون السادسة خارج الحساب تماماً: لا سرير ولا تذكرة ولا خدمة فردية.
+ * ومن هم في السادسة فأكثر لهم سرير إضافي وتُحتسب عليهم التذاكر والخدمات.
  */
 export function quote(input: QuoteInput): QuoteResult {
   const adults = Math.max(1, nonNeg(input.adults));
-  const children = nonNeg(input.children);
-  const rooms = Math.max(1, nonNeg(input.rooms));
-  const chargedChildren = input.childFreeInRoom ? Math.max(0, children - 1) : children;
-  const payingPax = adults + chargedChildren;
+  const childrenBed = nonNeg(input.childrenBed);
+  const plan = planRooms(adults, childrenBed);
+  const payingPax = plan.payingPax;
   const seasonPct = SEASON_PCT[input.season] ?? 100;
 
   const lines: QuoteLine[] = [];
@@ -143,12 +174,16 @@ export function quote(input: QuoteInput): QuoteResult {
   };
 
   const hotelNights = nonNeg(input.hotelNights);
+  const roomCost = nonNeg(input.hotelRate) * plan.rooms;
+  const tripleCost = nonNeg(input.tripleExtra) * plan.triples;
   const hotel = add(
     'hotel',
     'الإقامة',
-    `${money(input.hotelRate)} × ${rooms} غرفة × ${hotelNights} ليلة` +
+    `${money(input.hotelRate)} × ${plan.rooms} ${plan.rooms === 1 ? 'غرفة' : 'غرف'}` +
+      (plan.triples ? ` + ${plan.triples} سرير إضافي` : '') +
+      ` × ${hotelNights} ليلة` +
       (seasonPct === 100 ? '' : ` · موسم ${SEASON_LABEL[input.season]}`),
-    pct(nonNeg(input.hotelRate) * rooms * hotelNights, seasonPct),
+    pct((roomCost + tripleCost) * hotelNights, seasonPct),
   );
 
   const carDays = nonNeg(input.carDays);
@@ -203,6 +238,7 @@ export function quote(input: QuoteInput): QuoteResult {
 
   return {
     lines,
+    plan,
     cost,
     markup,
     fees,
@@ -218,6 +254,8 @@ export function quote(input: QuoteInput): QuoteResult {
 export interface TierRates {
   /** سعر الغرفة لليلة لهذه الفئة، بالسنت. */
   hotelRate: number;
+  /** فرق السرير الثالث لهذه الفئة، بالسنت. */
+  tripleExtra: number;
   /** سعر السيارة لليوم لهذه الفئة، بالسنت. */
   carRate: number;
   /** هل تشمل الفئة مرشداً طوال البرنامج. */
@@ -241,6 +279,7 @@ export function threeTiers(base: QuoteInput, rates: Record<Tier, TierRates>): Ti
     const result = quote({
       ...base,
       hotelRate: r.hotelRate,
+      tripleExtra: r.tripleExtra,
       carRate: r.carRate,
       guideDays: r.guideIncluded ? Math.max(base.guideDays, base.carDays) : base.guideDays,
       marginPct: TIER_MARGIN_PCT[tier],

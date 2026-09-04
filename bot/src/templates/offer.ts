@@ -36,7 +36,14 @@ export interface OfferDoc {
   nights: number;
   travelMonth?: string;
   customerName?: string;
-  travelers: { adults: number; children: number; infants: number; rooms: number };
+  travelers: {
+    adults: number;
+    /** أطفال دون السادسة — مجاناً. */
+    childrenFree: number;
+    /** أطفال 6 فأكثر — سرير إضافي. */
+    childrenBed: number;
+    rooms: number;
+  };
   tiers: OfferTier[];
   tours: string[];
   includes: string[];
@@ -83,8 +90,8 @@ function chunk<T>(items: T[], max: number): T[][] {
 
 function paxLine(t: OfferDoc['travelers']): string {
   const parts = [`${t.adults} بالغ`];
-  if (t.children) parts.push(`${t.children} طفل`);
-  if (t.infants) parts.push(`${t.infants} رضيع`);
+  if (t.childrenBed) parts.push(`${t.childrenBed} طفل`);
+  if (t.childrenFree) parts.push(`${t.childrenFree} طفل دون السادسة`);
   return parts.join(' · ');
 }
 
@@ -222,7 +229,10 @@ ${fontFaceCss()}
   .letter p { margin: 0 0 4mm; }
 
   .promises { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-top: 9mm; }
-  .promise { background: #fff; border-radius: 4mm; padding: 5mm 5.5mm; box-shadow: 0 1mm 3mm rgba(46,157,168,.12); }
+  .promise {
+    background: #fff; border-radius: 4mm; padding: 5mm 5.5mm;
+    box-shadow: 0 1mm 3.5mm rgba(23,86,96,.18);
+  }
   .promise b { display: block; font-size: 11pt; color: ${palette.seaDeep}; margin-bottom: 1.5mm; }
   .promise span { font-size: 9.5pt; color: ${palette.ink2}; line-height: 1.6; }
 
@@ -253,7 +263,7 @@ ${fontFaceCss()}
   .hotelrow {
     display: grid; grid-template-columns: 26mm 1fr auto; gap: 4mm; align-items: center;
     background: #fff; border-radius: 3mm; padding: 4mm 5mm;
-    box-shadow: 0 .8mm 2.5mm rgba(46,157,168,.10);
+    box-shadow: 0 1mm 3.5mm rgba(23,86,96,.18);
   }
   .hotelrow .lvl { font-size: 10pt; font-weight: 700; color: ${palette.seaDeep}; }
   .hotelrow .nm { font-size: 10.5pt; color: ${palette.ink}; }
@@ -292,7 +302,7 @@ ${fontFaceCss()}
   /* ---------------- الخيارات ---------------- */
   .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5mm; align-items: start; padding-top: 5mm; }
   .tier { border-radius: 4mm; overflow: hidden; background: ${palette.card};
-    box-shadow: 0 1mm 4mm rgba(46,157,168,.16); display: flex; flex-direction: column; }
+    box-shadow: 0 1.5mm 5mm rgba(23,86,96,.22); display: flex; flex-direction: column; }
   .tier.rec { box-shadow: 0 2mm 8mm rgba(46,157,168,.34); margin-top: -5mm; }
   .tier .ribbon { background: ${palette.seaDeep}; color: #fff; font-size: 9.5pt; font-weight: 700; padding: 2.2mm; text-align: center; }
   .tier .top { position: relative; height: 36mm; overflow: hidden; background: ${palette.seaDeep}; }
@@ -311,26 +321,36 @@ ${fontFaceCss()}
 
   /* ---------------- يشمل / لا يشمل / عملي ---------------- */
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
-  .box { border-radius: 3mm; padding: 5mm 6mm; }
-  .box.inc { background: ${palette.seaSoft}; }
-  .box.exc { background: ${palette.sandSoft}; }
+  /* البطاقات كانت تذوب في الخلفية: أرضية بيضاء وشريط لوني علوي وظل يرفعها. */
+  .box {
+    border-radius: 3mm; padding: 5mm 6mm;
+    background: #fff;
+    box-shadow: 0 1mm 3.5mm rgba(23,86,96,.18);
+    border-top: 1mm solid ${palette.sea};
+  }
+  .box.exc { border-top-color: ${palette.sand}; }
   .box h4 { margin: 0 0 3mm; font-size: 11.5pt; font-weight: 700; }
   .box.inc h4 { color: ${palette.seaDeep}; }
   .box.exc h4 { color: ${palette.sand}; }
+  .box li span { color: ${palette.ink}; }
   .box ul { margin: 0; padding: 0; list-style: none; font-size: 9.5pt; color: ${palette.ink2}; }
   .box li { display: grid; grid-template-columns: 5mm 1fr; gap: 1.5mm; align-items: start; margin-bottom: 1.9mm; line-height: 1.5; }
   .box.inc li::before { content: "✓"; color: ${palette.sea}; font-weight: 700; }
   .box.exc li::before { content: "✕"; color: ${palette.sand}; font-weight: 700; }
 
   .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; margin-top: 6mm; }
-  .fact { background: #fff; border-radius: 3mm; padding: 4mm 5mm; box-shadow: 0 .8mm 2.5mm rgba(46,157,168,.10); }
+  .fact {
+    background: #fff; border-radius: 3mm; padding: 4mm 5mm;
+    box-shadow: 0 1mm 3.5mm rgba(23,86,96,.18);
+    border-inline-start: 0.8mm solid ${palette.sea};
+  }
   .fact b { display: block; font-size: 9pt; color: ${palette.sea}; margin-bottom: 1mm; }
   .fact span { font-size: 9.8pt; color: ${palette.ink2}; line-height: 1.55; }
 
   /* ---------------- الدفع والشروط ---------------- */
   .pay { display: flex; gap: 4mm; margin-bottom: 8mm; }
   .paystep { flex: 1; background: #fff; border-radius: 3mm; padding: 5mm; text-align: center;
-    box-shadow: 0 1mm 3mm rgba(46,157,168,.12); border-top: 1mm solid ${palette.sea}; }
+    box-shadow: 0 1mm 4mm rgba(23,86,96,.20); border-top: 1mm solid ${palette.sea}; }
   .paystep small { display: block; font-size: 8.5pt; color: ${palette.muted}; }
   .paystep b { display: block; font-family: ${fonts.display}; font-size: 19pt; color: ${palette.sand};
     font-variant-numeric: tabular-nums; margin: 1mm 0; }

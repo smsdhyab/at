@@ -1,33 +1,40 @@
 /**
- * الوصول لقاعدة البيانات — SQLite المدمجة في Node، بلا أي مكتبة خارجية.
+ * الوصول لقاعدة البيانات — PostgreSQL على Supabase.
  *
- * ponytail: البوت داخلي بنسخة واحدة وحجم كتابته صغير جداً (عشرات العروض شهرياً)،
- * وهذا هو المجال الذي تتفوق فيه SQLite على أي قاعدة عبر الشبكة: صفر حسابات،
- * صفر رابط اتصال، صفر زمن شبكة، وملف واحد يُنسخ احتياطياً بنسخه. لو صار البوت
- * بعدة نسخ متوازية أو احتاج وصولاً من خدمة أخرى، انقل إلى Postgres — كل
- * الاستعلامات هنا قياسية ما عدا `datetime('now')`.
+ * الاتصال عبر الـ pooler لا المضيف المباشر: `db.<ref>.supabase.co` لا يُحلّ
+ * على IPv4 في المشاريع الجديدة. الرابط الكامل في `.env`.
+ *
+ * كل الدوال غير متزامنة — هذا فرق جوهري عن نسخة SQLite السابقة، ومترجم
+ * TypeScript هو ما يضمن أن كل نداء صار عليه `await`.
  *
  * كل المبالغ العائدة أعداد صحيحة بالسنت.
  */
-import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import postgres from 'postgres';
 import type { QuoteInput, Season, Tier } from './pricing.ts';
 
-const file = process.env.DB_FILE ?? './data/aat.db';
-if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
+const url = process.env.DATABASE_URL;
+if (!url) {
+  throw new Error('DATABASE_URL غير موجود. انسخ .env.example إلى .env واملأه.');
+}
 
-export const db = new DatabaseSync(file);
-db.exec('pragma journal_mode = WAL');
-db.exec('pragma foreign_keys = ON');
+export const sql = postgres(url, {
+  ssl: 'require',
+  max: 5,
+  idle_timeout: 20,
+  connect_timeout: 15,
+  types: {
+    // معرّفات تليغرام من نوع bigint، ويعيدها المحرّك نصاً افتراضياً فتنكسر
+    // المقارنات. أرقامها دون حدّ Number الآمن فتحويلها آمن.
+    bigint: {
+      to: 20,
+      from: [20],
+      serialize: (v: number) => String(v),
+      parse: (v: string) => Number(v),
+    },
+  },
+});
 
-export const close = () => db.close();
-
-/** الأنواع التي تقبلها node:sqlite كمعامل مربوط. */
-type P = null | number | bigint | string | Uint8Array;
-const all = <T>(sql: string, ...p: P[]): T[] => db.prepare(sql).all(...p) as T[];
-const one = <T>(sql: string, ...p: P[]): T | undefined => db.prepare(sql).get(...p) as T | undefined;
-const run = (sql: string, ...p: P[]) => db.prepare(sql).run(...p);
+export const close = () => sql.end({ timeout: 5 });
 
 export interface Destination {
   slug: string;
@@ -38,12 +45,12 @@ export interface Destination {
   hero_image: string;
   /** مصفوفة JSON من روابط الصور — تُفكّ بـ `galleryOf`. */
   gallery: string;
+  /** سطر مصدر الصور الخارجية — يوجبه ترخيص كومنز. */
+  image_credits: string;
   /** مسار المدن بالأوزان — يُفكّ بـ parseRoute. */
   route: string;
   /** معلومات عملية — تُفكّ بـ parsePractical. */
   practical: string;
-  /** سطر مصدر الصور الخارجية — يوجبه ترخيص كومنز. فارغ إن كانت كل الصور لنا. */
-  image_credits: string;
 }
 
 /** يفكّ عمود gallery بأمان: عمود تالف لا يجب أن يمنع توليد عرض. */
@@ -63,6 +70,8 @@ export interface Hotel {
   class: string;
   rate_normal: number;
   rate_high: number;
+  /** فرق السرير الثالث لليلة، بالسنت. */
+  rate_triple: number;
 }
 
 export interface Car {
@@ -88,29 +97,29 @@ export interface QuoteRow {
   destination: string;
   nights: number;
   adults: number;
-  children: number;
+  children_bed: number;
+  children_free: number;
   sell: number;
   cost: number;
   status: string;
   chosen_tier: Tier;
   wp_post_id: number | null;
-  created_at: string;
+  created_at: Date;
 }
 
 /* ------------------------------- الوجهات ------------------------------- */
 
-export const listDestinations = () =>
-  all<Destination>(
-    `select slug, name, transfer_rate, ticket_pp, guide_rate, hero_image, gallery, image_credits, route, practical
-     from destinations where active = 1 order by sort_order, name`,
-  );
+const DEST_COLS = sql`slug, name, transfer_rate, ticket_pp, guide_rate,
+                      hero_image, gallery, image_credits, route, practical`;
 
-export const getDestination = (slug: string) =>
-  one<Destination>(
-    `select slug, name, transfer_rate, ticket_pp, guide_rate, hero_image, gallery, image_credits, route, practical
-     from destinations where slug = ?`,
-    slug,
-  );
+export const listDestinations = () => sql<Destination[]>`
+  select ${DEST_COLS} from destinations where active order by sort_order, name`;
+
+export const getDestination = async (slug: string): Promise<Destination | undefined> => {
+  const [row] = await sql<Destination[]>`
+    select ${DEST_COLS} from destinations where slug = ${slug}`;
+  return row;
+};
 
 const DEST_RATE_FIELDS = ['transfer_rate', 'ticket_pp', 'guide_rate'] as const;
 export type DestRateField = (typeof DEST_RATE_FIELDS)[number];
@@ -118,76 +127,72 @@ export type DestRateField = (typeof DEST_RATE_FIELDS)[number];
 export const setDestinationRate = (slug: string, field: DestRateField, cents: number) => {
   // اسم العمود لا يمكن أن يكون معامَلاً مربوطاً، فيُتحقق منه من قائمة مغلقة
   if (!DEST_RATE_FIELDS.includes(field)) throw new Error(`عمود غير مسموح: ${field}`);
-  return run(`update destinations set ${field} = ? where slug = ?`, cents, slug);
+  return sql`update destinations set ${sql(field)} = ${cents} where slug = ${slug}`;
 };
 
 /* ------------------------------- الفنادق ------------------------------- */
 
-export const listHotels = (destination: string) =>
-  all<Hotel>(
-    `select id, destination, name, class, rate_normal, rate_high
-     from hotels where destination = ? and active = 1 order by rate_normal`,
-    destination,
-  );
+export const listHotels = (destination: string) => sql<Hotel[]>`
+  select id, destination, name, class, rate_normal, rate_high, rate_triple
+  from hotels where destination = ${destination} and active
+  order by rate_normal`;
 
 /** أرخص فندق في كل فئة — يغذّي توليد الأسعار الثلاثة. */
-export const hotelsByClass = (destination: string) => {
-  const rows = listHotels(destination);
+export const hotelsByClass = async (destination: string) => {
+  const rows = await listHotels(destination);
   const pick = (cls: string) => rows.find((h) => h.class === cls);
   return { three: pick('3'), four: pick('4'), five: pick('5'), cabin: pick('cabin'), all: rows };
 };
 
-export const addHotel = (h: Omit<Hotel, 'id'>) =>
-  run(
-    `insert into hotels (destination, name, class, rate_normal, rate_high) values (?, ?, ?, ?, ?)`,
-    h.destination,
-    h.name,
-    h.class,
-    h.rate_normal,
-    h.rate_high,
-  );
+export const addHotel = (h: Omit<Hotel, 'id'>) => sql`
+  insert into hotels (destination, name, class, rate_normal, rate_high, rate_triple)
+  values (${h.destination}, ${h.name}, ${h.class}, ${h.rate_normal}, ${h.rate_high},
+          ${h.rate_triple})`;
 
-export const setHotelRates = (id: number, normal: number, high: number) =>
-  run(`update hotels set rate_normal = ?, rate_high = ? where id = ?`, normal, high, id);
+export const setHotelRates = (id: number, normal: number, high: number, triple?: number) =>
+  triple === undefined
+    ? sql`update hotels set rate_normal = ${normal}, rate_high = ${high} where id = ${id}`
+    : sql`update hotels set rate_normal = ${normal}, rate_high = ${high},
+                            rate_triple = ${triple} where id = ${id}`;
 
-export const deactivateHotel = (id: number) => run(`update hotels set active = 0 where id = ?`, id);
+/** إضافة سيارة جديدة — كان التعديل متاحاً والإضافة غير متاحة. */
+export const addCar = (destination: string, kind: string, name: string, rateDay: number) =>
+  sql`insert into cars (destination, kind, name, rate_day)
+      values (${destination}, ${kind}, ${name}, ${rateDay})`;
+
+export const deactivateHotel = (id: number) =>
+  sql`update hotels set active = false where id = ${id}`;
 
 /* ------------------------------ السيارات ------------------------------ */
 
-export const listCars = (destination: string) =>
-  all<Car>(
-    `select id, destination, kind, name, rate_day
-     from cars where destination = ? and active = 1 order by rate_day`,
-    destination,
-  );
+export const listCars = (destination: string) => sql<Car[]>`
+  select id, destination, kind, name, rate_day
+  from cars where destination = ${destination} and active order by rate_day`;
 
-export const carByKind = (destination: string, kind: string) =>
-  one<Car>(
-    `select id, destination, kind, name, rate_day
-     from cars where destination = ? and kind = ? and active = 1 limit 1`,
-    destination,
-    kind,
-  );
+export const carByKind = async (destination: string, kind: string): Promise<Car | undefined> => {
+  const [row] = await sql<Car[]>`
+    select id, destination, kind, name, rate_day
+    from cars where destination = ${destination} and kind = ${kind} and active limit 1`;
+  return row;
+};
 
 export const setCarRate = (id: number, cents: number) =>
-  run(`update cars set rate_day = ? where id = ?`, cents, id);
+  sql`update cars set rate_day = ${cents} where id = ${id}`;
 
 /* ------------------------------- الجولات ------------------------------- */
 
-export const listTours = (destination: string) =>
-  all<TourRow>(
-    `select id, destination, name, price, description
-     from tours where destination = ? and active = 1 order by sort_order, id`,
-    destination,
-  );
+export const listTours = (destination: string) => sql<TourRow[]>`
+  select id, destination, name, price, description
+  from tours where destination = ${destination} and active order by sort_order, id`;
 
 export const addTour = (destination: string, name: string, price: number) =>
-  run(`insert into tours (destination, name, price) values (?, ?, ?)`, destination, name, price);
+  sql`insert into tours (destination, name, price) values (${destination}, ${name}, ${price})`;
 
 export const setTourPrice = (id: number, cents: number) =>
-  run(`update tours set price = ? where id = ?`, cents, id);
+  sql`update tours set price = ${cents} where id = ${id}`;
 
-export const deactivateTour = (id: number) => run(`update tours set active = 0 where id = ?`, id);
+export const deactivateTour = (id: number) =>
+  sql`update tours set active = false where id = ${id}`;
 
 /* ---------------------------- المستخدمون ---------------------------- */
 
@@ -196,42 +201,44 @@ export interface User {
   name: string | null;
   username: string | null;
   role: string;
-  created_at: string;
+  created_at: Date;
 }
 
-export const getUser = (id: number) =>
-  one<User>(`select telegram_id, name, username, role, created_at from users where telegram_id = ?`, id);
+export const getUser = async (id: number): Promise<User | undefined> => {
+  const [row] = await sql<User[]>`
+    select telegram_id, name, username, role, created_at from users where telegram_id = ${id}`;
+  return row;
+};
 
-export const listUsers = () =>
-  all<User>(`select telegram_id, name, username, role, created_at from users order by created_at`);
+export const listUsers = () => sql<User[]>`
+  select telegram_id, name, username, role, created_at from users order by created_at`;
 
-export const addUser = (id: number, name: string | null, username: string | null) =>
-  run(
-    `insert into users (telegram_id, name, username) values (?, ?, ?)
-     on conflict(telegram_id) do update set name = excluded.name, username = excluded.username`,
-    id, name, username,
-  );
+export const addUser = (id: number, name: string | null, username: string | null) => sql`
+  insert into users (telegram_id, name, username) values (${id}, ${name}, ${username})
+  on conflict (telegram_id) do update set name = excluded.name, username = excluded.username`;
 
 export const setUserRole = (id: number, role: 'admin' | 'blocked') =>
-  run(`update users set role = ? where telegram_id = ?`, role, id);
+  sql`update users set role = ${role} where telegram_id = ${id}`;
 
 /* ----------------------------- الإعدادات ----------------------------- */
 
-export const getSetting = (key: string, fallback = ''): string =>
-  one<{ value: string }>(`select value from settings where key = ?`, key)?.value ?? fallback;
+export const getSetting = async (key: string, fallback = ''): Promise<string> => {
+  const [row] = await sql<{ value: string }[]>`select value from settings where key = ${key}`;
+  return row?.value ?? fallback;
+};
 
-export const setSetting = (key: string, value: string) =>
-  run(`insert into settings (key, value) values (?, ?)
-       on conflict(key) do update set value = excluded.value`, key, value);
+export const setSetting = (key: string, value: string) => sql`
+  insert into settings (key, value) values (${key}, ${value})
+  on conflict (key) do update set value = excluded.value`;
 
-export const isOpenAccess = () => getSetting('open_access', '1') === '1';
+export const isOpenAccess = async () => (await getSetting('open_access', '1')) === '1';
 
 /* ------------------------------- العروض ------------------------------- */
 
 /** رقم تسلسلي للعرض بصيغة AT-2026-0001. */
-export const nextSerial = (): string => {
-  run(`update counters set value = value + 1 where name = 'quote_serial'`);
-  const row = one<{ value: number }>(`select value from counters where name = 'quote_serial'`);
+export const nextSerial = async (): Promise<string> => {
+  const [row] = await sql<{ value: number }[]>`
+    update counters set value = value + 1 where name = 'quote_serial' returning value`;
   return `AT-${new Date().getFullYear()}-${String(row?.value ?? 1).padStart(4, '0')}`;
 };
 
@@ -250,89 +257,65 @@ export interface SaveQuoteArgs {
   sell: number;
 }
 
-export const saveQuote = (a: SaveQuoteArgs): QuoteRow => {
-  db.exec('begin');
-  try {
+export const saveQuote = (a: SaveQuoteArgs): Promise<QuoteRow> =>
+  sql.begin(async (tx) => {
     let customerId: number | null = null;
     if (a.customerName || a.customerPhone) {
-      const r = run(
-        `insert into customers (name, phone) values (?, ?)`,
-        a.customerName,
-        a.customerPhone,
-      );
-      customerId = Number(r.lastInsertRowid);
+      const [c] = await tx<{ id: number }[]>`
+        insert into customers (name, phone) values (${a.customerName}, ${a.customerPhone})
+        returning id`;
+      customerId = c?.id ?? null;
     }
-    run(
-      `insert into quotes (
-         serial, customer_id, created_by, destination, nights, adults, children, infants,
-         travel_month, input, tiers, chosen_tier, cost, sell
-       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      a.serial,
-      customerId,
-      a.createdBy,
-      a.destination,
-      a.input.nights,
-      a.input.adults,
-      a.input.children,
-      a.input.infants,
-      a.travelMonth,
-      JSON.stringify(a.input),
-      JSON.stringify(a.tiers),
-      a.chosenTier,
-      a.cost,
-      a.sell,
-    );
-    const row = one<QuoteRow>(
-      `select id, serial, destination, nights, adults, children, sell, cost, status,
-              chosen_tier, wp_post_id, created_at
-       from quotes where serial = ?`,
-      a.serial,
-    )!;
-    db.exec('commit');
-    return row;
-  } catch (e) {
-    db.exec('rollback');
-    throw e;
-  }
+    const [row] = await tx<QuoteRow[]>`
+      insert into quotes (
+        serial, customer_id, created_by, destination, nights, adults, children_bed, children_free,
+        travel_month, input, tiers, chosen_tier, cost, sell
+      ) values (
+        ${a.serial}, ${customerId}, ${a.createdBy}, ${a.destination}, ${a.input.nights},
+        ${a.input.adults}, ${a.input.childrenBed}, ${a.input.childrenFree}, ${a.travelMonth},
+        ${JSON.stringify(a.input)}, ${JSON.stringify(a.tiers)}, ${a.chosenTier},
+        ${a.cost}, ${a.sell}
+      )
+      returning id, serial, destination, nights, adults, children_bed, children_free, sell, cost, status,
+                chosen_tier, wp_post_id, created_at`;
+    return row!;
+  }) as Promise<QuoteRow>;
+
+export const getQuote = async (id: number) => {
+  const [row] = await sql<
+    (QuoteRow & { input: string; tiers: string; customer_name: string | null; customer_phone: string | null })[]
+  >`
+    select q.*, c.name as customer_name, c.phone as customer_phone
+    from quotes q left join customers c on c.id = q.customer_id
+    where q.id = ${id}`;
+  return row;
 };
 
-export const getQuote = (id: number) =>
-  one<QuoteRow & { input: string; tiers: string; customer_name: string | null; customer_phone: string | null }>(
-    `select q.*, c.name as customer_name, c.phone as customer_phone
-     from quotes q left join customers c on c.id = q.customer_id
-     where q.id = ?`,
-    id,
-  );
-
-export const listRecentQuotes = (createdBy: number, limit = 10) =>
-  all<QuoteRow>(
-    `select id, serial, destination, nights, adults, children, sell, cost, status,
-            chosen_tier, wp_post_id, created_at
-     from quotes where created_by = ? order by created_at desc, id desc limit ?`,
-    createdBy,
-    limit,
-  );
+export const listRecentQuotes = (createdBy: number, limit = 10) => sql<QuoteRow[]>`
+  select id, serial, destination, nights, adults, children_bed, children_free, sell, cost, status,
+         chosen_tier, wp_post_id, created_at
+  from quotes where created_by = ${createdBy}
+  order by created_at desc, id desc limit ${limit}`;
 
 export const setQuoteStatus = (id: number, status: 'draft' | 'sent' | 'won' | 'lost') =>
-  run(`update quotes set status = ?, updated_at = datetime('now') where id = ?`, status, id);
+  sql`update quotes set status = ${status}, updated_at = now() where id = ${id}`;
 
 export const setQuoteWpPost = (id: number, wpPostId: number) =>
-  run(`update quotes set wp_post_id = ?, updated_at = datetime('now') where id = ?`, wpPostId, id);
+  sql`update quotes set wp_post_id = ${wpPostId}, updated_at = now() where id = ${id}`;
 
 /** أرقام سريعة للتقرير خلال آخر N يوماً. */
-export const stats = (days = 30) => {
-  const row = one<{ count: number; sell: number; profit: number; won: number }>(
-    `select count(*)                                          as count,
-            coalesce(sum(sell), 0)                            as sell,
-            coalesce(sum(sell - cost), 0)                     as profit,
-            sum(case when status = 'won' then 1 else 0 end)   as won
-     from quotes where created_at > datetime('now', ?)`,
-    `-${Math.max(1, Math.floor(days))} days`,
-  );
+export const stats = async (days = 30) => {
+  const [row] = await sql<{ count: string; sell: string; profit: string; won: string }[]>`
+    select count(*)                                        as count,
+           coalesce(sum(sell), 0)                          as sell,
+           coalesce(sum(sell - cost), 0)                   as profit,
+           count(*) filter (where status = 'won')          as won
+    from quotes
+    where created_at > now() - make_interval(days => ${Math.max(1, Math.floor(days))})`;
   return {
-    count: row?.count ?? 0,
-    sell: row?.sell ?? 0,
-    profit: row?.profit ?? 0,
-    won: row?.won ?? 0,
+    count: Number(row?.count ?? 0),
+    sell: Number(row?.sell ?? 0),
+    profit: Number(row?.profit ?? 0),
+    won: Number(row?.won ?? 0),
   };
 };

@@ -11,8 +11,8 @@ import { cardHtml, CARD_DIMENSIONS } from './templates/card.ts';
 import { findBrowser, renderPdf, renderPng, closeBrowser } from './render.ts';
 
 const input: QuoteInput = {
-  nights: 6, adults: 2, children: 2, infants: 0, rooms: 1, season: 'normal',
-  hotelRate: 9_775, hotelNights: 6, carRate: 9_500, carDays: 5,
+  nights: 6, adults: 2, childrenFree: 0, childrenBed: 2, season: 'normal',
+  hotelRate: 9_775, tripleExtra: 3_400, hotelNights: 6, carRate: 9_500, carDays: 5,
   transfers: 2, transferRate: 4_500,
   tours: [
     { name: 'جولة أوزنجول وحيدر نبي', price: 9_000 },
@@ -21,13 +21,13 @@ const input: QuoteInput = {
   ],
   ticketPerPerson: 1_200, guideDays: 0, guideRate: 7_000,
   simPerPerson: 0, dinnerPerPerson: 0, miscTotal: 0,
-  marginPct: 22, feesBp: 250, depositPct: 30, roundTo: 1_000, childFreeInRoom: false,
+  marginPct: 22, feesBp: 250, depositPct: 30, roundTo: 1_000,
 };
 
 const rates: Record<Tier, TierRates> = {
-  economy: { hotelRate: 5_750, carRate: 7_000, guideIncluded: false, hotelName: 'فندق 3 نجوم — طرابزون' },
-  premium: { hotelRate: 9_775, carRate: 9_500, guideIncluded: false, hotelName: 'فندق 4 نجوم — طرابزون' },
-  vip: { hotelRate: 16_675, carRate: 15_000, guideIncluded: true, hotelName: 'فندق 5 نجوم — طرابزون' },
+  economy: { hotelRate: 5_750, tripleExtra: 2_000, carRate: 7_000, guideIncluded: false, hotelName: 'فندق 3 نجوم — طرابزون' },
+  premium: { hotelRate: 9_775, tripleExtra: 3_400, carRate: 9_500, guideIncluded: false, hotelName: 'فندق 4 نجوم — طرابزون' },
+  vip: { hotelRate: 16_675, tripleExtra: 5_800, carRate: 15_000, guideIncluded: true, hotelName: 'فندق 5 نجوم — طرابزون' },
 };
 
 const offers = threeTiers(input, rates);
@@ -35,7 +35,7 @@ const doc = toOfferDoc({
   serial: 'AT-2026-0001',
   destinationName: 'الشمال التركي — طرابزون وأوزنجول',
   nights: 6,
-  travelers: { adults: 2, children: 2, infants: 0, rooms: 1 },
+  travelers: { adults: 2, childrenFree: 0, childrenBed: 2, rooms: 2 },
   offers,
   hotelClasses: { economy: '3', premium: '4', vip: '5' },
   tourNames: input.tours.map((t) => t.name),
