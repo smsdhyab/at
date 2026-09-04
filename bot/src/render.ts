@@ -55,6 +55,16 @@ let browser: Browser | null = null;
 
 async function getBrowser(): Promise<Browser> {
   if (browser?.connected) return browser;
+
+  // متصفح بعيد عبر WebSocket: الطريق الوحيد لتوليد PDF من بيئة بلا متصفح
+  // (Supabase Edge Functions وأخواتها). يُضبط BROWSER_WS_ENDPOINT فيُستعمل،
+  // وإلا يُشغَّل متصفح محلي. لا فرق في بقية الكود.
+  const wsEndpoint = process.env.BROWSER_WS_ENDPOINT;
+  if (wsEndpoint) {
+    browser = await puppeteer.connect({ browserWSEndpoint: wsEndpoint });
+    return browser;
+  }
+
   browser = await puppeteer.launch({
     executablePath: findBrowser(),
     headless: true,
@@ -65,7 +75,11 @@ async function getBrowser(): Promise<Browser> {
 }
 
 export async function closeBrowser(): Promise<void> {
-  if (browser?.connected) await browser.close();
+  if (browser?.connected) {
+    // المتصفح البعيد مشترك ولا يُغلق — يُفصل عنه فقط
+    if (process.env.BROWSER_WS_ENDPOINT) await browser.disconnect();
+    else await browser.close();
+  }
   browser = null;
 }
 
