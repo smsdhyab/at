@@ -231,10 +231,14 @@ ${fontFaceCss()}
   .promises { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-top: 9mm; }
   .promise {
     background: #fff; border-radius: 4mm; padding: 5mm 5.5mm;
-    box-shadow: 0 1mm 3.5mm rgba(23,86,96,.18);
+    border: .35mm solid rgba(29,117,128,.20);
   }
   .promise b { display: block; font-size: 12.5pt; color: ${palette.seaDeep}; margin-bottom: 1.5mm; }
   .promise span { font-size: 10.8pt; color: ${palette.ink2}; line-height: 1.65; }
+
+  /* لا تستخدم box-shadow مموّهاً: عارض PDF على الهاتف (PDFKit) يتجاهل
+     قناع التمويه ويرسم الظل مستطيلاً رمادياً صلباً خلف البطاقة. الحدّ
+     الرفيع يعطي نفس الإبراز ويُرسم بدقة في كل عارض. */
 
   /* ---------------- البرنامج اليومي ---------------- */
   .days { display: flex; flex-direction: column; gap: 3mm; }
@@ -242,7 +246,7 @@ ${fontFaceCss()}
   .day {
     display: grid; grid-template-columns: 15mm 1fr; gap: 4mm; align-items: start;
     background: #fff; border-radius: 3.5mm; padding: 3.5mm 4mm;
-    box-shadow: 0 1mm 3mm rgba(23,86,96,.16);
+    border: .35mm solid rgba(29,117,128,.20);
   }
   .day .badge { background: ${palette.seaSoft}; border-radius: 3mm; text-align: center; padding: 2.5mm 1mm; color: ${palette.seaDeep}; }
   .day .badge small { display: block; font-size: 8.5pt; opacity: .8; }
@@ -268,7 +272,7 @@ ${fontFaceCss()}
   .hotelrow {
     display: grid; grid-template-columns: 26mm 1fr auto; gap: 4mm; align-items: center;
     background: #fff; border-radius: 3mm; padding: 4mm 5mm;
-    box-shadow: 0 1mm 3.5mm rgba(23,86,96,.18);
+    border: .35mm solid rgba(29,117,128,.20);
   }
   .hotelrow .lvl { font-size: 11.5pt; font-weight: 700; color: ${palette.seaDeep}; }
   .hotelrow .nm { font-size: 11.5pt; color: ${palette.ink}; }
@@ -307,8 +311,8 @@ ${fontFaceCss()}
   /* ---------------- الخيارات ---------------- */
   .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5mm; align-items: start; padding-top: 5mm; }
   .tier { border-radius: 4mm; overflow: hidden; background: ${palette.card};
-    box-shadow: 0 1.5mm 5mm rgba(23,86,96,.22); display: flex; flex-direction: column; }
-  .tier.rec { box-shadow: 0 2mm 8mm rgba(46,157,168,.34); margin-top: -5mm; }
+    border: .35mm solid rgba(29,117,128,.20); display: flex; flex-direction: column; }
+  .tier.rec { border: .7mm solid ${palette.sea}; margin-top: -5mm; }
   .tier .ribbon { background: ${palette.seaDeep}; color: #fff; font-size: 10.5pt; font-weight: 700; padding: 2.2mm; text-align: center; }
   .tier .top { position: relative; height: 36mm; overflow: hidden; background: ${palette.seaDeep}; }
   .tier .top img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -330,7 +334,7 @@ ${fontFaceCss()}
   .box {
     border-radius: 3mm; padding: 5mm 6mm;
     background: #fff;
-    box-shadow: 0 1mm 3.5mm rgba(23,86,96,.18);
+    border: .35mm solid rgba(29,117,128,.20);
     border-top: 1mm solid ${palette.sea};
   }
   .box.exc { border-top-color: ${palette.sand}; }
@@ -346,7 +350,7 @@ ${fontFaceCss()}
   .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; margin-top: 6mm; }
   .fact {
     background: #fff; border-radius: 3mm; padding: 4mm 5mm;
-    box-shadow: 0 1mm 3.5mm rgba(23,86,96,.18);
+    border: .35mm solid rgba(29,117,128,.20);
     border-inline-start: 0.8mm solid ${palette.sea};
   }
   .fact b { display: block; font-size: 10pt; color: ${palette.sea}; margin-bottom: 1mm; }
@@ -355,7 +359,7 @@ ${fontFaceCss()}
   /* ---------------- الدفع والشروط ---------------- */
   .pay { display: flex; gap: 4mm; margin-bottom: 8mm; }
   .paystep { flex: 1; background: #fff; border-radius: 3mm; padding: 5mm; text-align: center;
-    box-shadow: 0 1mm 4mm rgba(23,86,96,.20); border-top: 1mm solid ${palette.sea}; }
+    border: .35mm solid rgba(29,117,128,.20); border-top: 1mm solid ${palette.sea}; }
   .paystep small { display: block; font-size: 9.5pt; color: ${palette.muted}; }
   .paystep b { display: block; font-family: ${fonts.display}; font-size: 19pt; color: ${palette.sand};
     font-variant-numeric: tabular-nums; margin: 1mm 0; }
