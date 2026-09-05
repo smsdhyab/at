@@ -73,7 +73,7 @@ const esc = (s: unknown): string =>
 const STARS: Record<string, string> = { '3': '★★★', '4': '★★★★', '5': '★★★★★' };
 
 /** أقصى عدد أيام في الصفحة الواحدة قبل أن تُفتح صفحة جديدة. */
-const DAYS_PER_SHEET = 5;
+const DAYS_PER_SHEET = 4;
 
 /**
  * يقسّم على صفحات متوازنة لا ممتلئة ثم شبه فارغة.
@@ -149,8 +149,8 @@ ${fontFaceCss()}
   html, body { margin: 0; padding: 0; }
   body {
     font-family: ${fonts.body};
-    font-size: 11pt;
-    line-height: 1.65;
+    font-size: 12pt;
+    line-height: 1.7;
     color: ${palette.ink};
     background: ${palette.skyLow};
     -webkit-print-color-adjust: exact;
@@ -175,19 +175,19 @@ ${fontFaceCss()}
     border-radius: 2mm;
     padding: 2.6mm 4mm;
     display: flex; justify-content: space-between; gap: 4mm;
-    font-size: 8pt; font-weight: 500; color: ${palette.seaDeep};
+    font-size: 8.5pt; font-weight: 500; color: ${palette.seaDeep};
   }
 
   /* رأس القسم: كلمة صغيرة بلون الشمس، ثم عنوان ثقيل، ثم خطّان بلونين. */
   .sec-eyebrow {
-    font-size: 9pt; font-weight: 600; color: ${palette.sand};
+    font-size: 10.5pt; font-weight: 600; color: ${palette.sand};
     margin: 0 0 1.5mm;
   }
   h3.sec {
     font-family: ${fonts.display}; font-size: 26pt; font-weight: 900;
     color: ${palette.seaDeep}; margin: 0 0 2mm; line-height: 1.15;
   }
-  .sec-note { font-size: 9.5pt; color: ${palette.ink2}; margin: 0 0 4mm; }
+  .sec-note { font-size: 10.5pt; color: ${palette.ink2}; margin: 0 0 4mm; }
   .sec-rule {
     height: 1mm; width: 26mm; margin: 0 0 7mm; border-radius: 1mm;
     background: linear-gradient(to left, ${palette.sand} 0 14mm, ${palette.sea} 14mm 100%);
@@ -205,7 +205,7 @@ ${fontFaceCss()}
   .cover-top { display: flex; align-items: center; gap: 5mm; }
   .cover-top img { width: 17mm; height: 17mm; object-fit: contain; }
   .cover-top h1 { font-family: ${fonts.display}; font-size: 17pt; font-weight: 700; margin: 0; line-height: 1.25; color: #fff; }
-  .cover-top p { margin: 0; font-size: 8.5pt; color: rgba(255,255,255,.75); }
+  .cover-top p { margin: 0; font-size: 9.5pt; color: rgba(255,255,255,.75); }
   .cover-mid { margin-top: auto; }
   .eyebrow { font-size: 11pt; font-weight: 500; color: ${palette.sun}; margin: 0 0 3mm; text-shadow: 0 .5mm 2mm rgba(0,0,0,.45); }
   .cover-mid h2 {
@@ -213,19 +213,19 @@ ${fontFaceCss()}
     font-size: 48pt; line-height: 1.08; margin: 0 0 3mm; color: #fff;
     text-shadow: 0 1mm 4mm rgba(0,0,0,.35);
   }
-  .cover-mid .duration { font-size: 13pt; color: rgba(255,255,255,.88); margin: 0 0 7mm; }
+  .cover-mid .duration { font-size: 14.5pt; color: rgba(255,255,255,.88); margin: 0 0 7mm; }
   .cover-rule { width: 30mm; height: 0.6mm; background: ${palette.sun}; margin-bottom: 7mm; }
   .cover-price { display: flex; align-items: baseline; gap: 4mm; margin: 0 0 10mm; }
-  .cover-price span { font-size: 9.5pt; color: rgba(255,255,255,.78); }
+  .cover-price span { font-size: 11pt; color: rgba(255,255,255,.78); }
   .cover-price strong { font-family: ${fonts.display}; font-size: 40pt; color: ${palette.sun}; line-height: 1; font-variant-numeric: tabular-nums; }
   .cover-bar { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 0.2mm solid rgba(255,255,255,.28); padding-top: 5mm; }
   .cover-bar div { text-align: center; }
   .cover-bar div + div { border-inline-start: 0.2mm solid rgba(255,255,255,.2); }
-  .cover-bar span { display: block; font-size: 8pt; color: rgba(255,255,255,.62); margin-bottom: .8mm; }
-  .cover-bar strong { font-size: 10.5pt; font-weight: 500; color: #fff; }
+  .cover-bar span { display: block; font-size: 9pt; color: rgba(255,255,255,.62); margin-bottom: .8mm; }
+  .cover-bar strong { font-size: 12pt; font-weight: 500; color: #fff; }
 
   /* ---------------- رسالة الترحيب ---------------- */
-  .letter { font-size: 11.5pt; line-height: 1.95; color: ${palette.ink2}; max-width: 155mm; }
+  .letter { font-size: 12.5pt; line-height: 2; color: ${palette.ink2}; max-width: 155mm; }
   .letter p { margin: 0 0 4mm; }
 
   .promises { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-top: 9mm; }
@@ -233,18 +233,23 @@ ${fontFaceCss()}
     background: #fff; border-radius: 4mm; padding: 5mm 5.5mm;
     box-shadow: 0 1mm 3.5mm rgba(23,86,96,.18);
   }
-  .promise b { display: block; font-size: 11pt; color: ${palette.seaDeep}; margin-bottom: 1.5mm; }
-  .promise span { font-size: 9.5pt; color: ${palette.ink2}; line-height: 1.6; }
+  .promise b { display: block; font-size: 12.5pt; color: ${palette.seaDeep}; margin-bottom: 1.5mm; }
+  .promise span { font-size: 10.8pt; color: ${palette.ink2}; line-height: 1.65; }
 
   /* ---------------- البرنامج اليومي ---------------- */
-  .days { display: flex; flex-direction: column; gap: 4mm; }
-  .day { display: grid; grid-template-columns: 15mm 1fr; gap: 4mm; align-items: start; }
+  .days { display: flex; flex-direction: column; gap: 3mm; }
+  /* بطاقة بيضاء بظل: النص يبقى مقروءاً فوق شريط الصورة السفلي مهما طال البرنامج. */
+  .day {
+    display: grid; grid-template-columns: 15mm 1fr; gap: 4mm; align-items: start;
+    background: #fff; border-radius: 3.5mm; padding: 3.5mm 4mm;
+    box-shadow: 0 1mm 3mm rgba(23,86,96,.16);
+  }
   .day .badge { background: ${palette.seaSoft}; border-radius: 3mm; text-align: center; padding: 2.5mm 1mm; color: ${palette.seaDeep}; }
-  .day .badge small { display: block; font-size: 7.5pt; opacity: .8; }
-  .day .badge b { display: block; font-size: 15pt; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
-  .day h4 { margin: 0 0 1mm; font-size: 12pt; font-weight: 700; color: ${palette.seaDeep}; line-height: 1.35; }
-  .day p { margin: 0; font-size: 9.8pt; line-height: 1.7; color: ${palette.ink2}; }
-  .day .sleep { display: inline-block; margin-top: 1.5mm; font-size: 8.5pt; color: ${palette.sand}; }
+  .day .badge small { display: block; font-size: 8.5pt; opacity: .8; }
+  .day .badge b { display: block; font-size: 16pt; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .day h4 { margin: 0 0 1.2mm; font-size: 13.5pt; font-weight: 700; color: ${palette.seaDeep}; line-height: 1.35; }
+  .day p { margin: 0; font-size: 11pt; line-height: 1.72; color: ${palette.ink2}; }
+  .day .sleep { display: inline-block; margin-top: 1.5mm; font-size: 9.5pt; color: ${palette.sand}; }
 
   /* ---------------- المسار والإقامة ---------------- */
   .route { display: flex; align-items: stretch; margin-bottom: 9mm; }
@@ -256,8 +261,8 @@ ${fontFaceCss()}
     border-radius: 50%; background: ${palette.sea}; color: #fff;
     font-size: 10pt; font-weight: 700; line-height: 10mm; font-variant-numeric: tabular-nums;
   }
-  .stop b { display: block; font-size: 10.5pt; color: ${palette.seaDeep}; }
-  .stop span { font-size: 8.5pt; color: ${palette.muted}; }
+  .stop b { display: block; font-size: 11.5pt; color: ${palette.seaDeep}; }
+  .stop span { font-size: 9.5pt; color: ${palette.muted}; }
 
   .hotels { display: flex; flex-direction: column; gap: 3mm; }
   .hotelrow {
@@ -265,9 +270,9 @@ ${fontFaceCss()}
     background: #fff; border-radius: 3mm; padding: 4mm 5mm;
     box-shadow: 0 1mm 3.5mm rgba(23,86,96,.18);
   }
-  .hotelrow .lvl { font-size: 10pt; font-weight: 700; color: ${palette.seaDeep}; }
-  .hotelrow .nm { font-size: 10.5pt; color: ${palette.ink}; }
-  .hotelrow .st { font-size: 9.5pt; color: ${palette.sun}; }
+  .hotelrow .lvl { font-size: 11.5pt; font-weight: 700; color: ${palette.seaDeep}; }
+  .hotelrow .nm { font-size: 11.5pt; color: ${palette.ink}; }
+  .hotelrow .st { font-size: 10.5pt; color: ${palette.sun}; }
 
   /* ---------------- خلفية الصفحة ---------------- */
   /* منظر تركي أسفل كل صفحة يتلاشى صعوداً في لون الورق: الصفحة لا تظهر
@@ -283,9 +288,9 @@ ${fontFaceCss()}
         ${palette.sky} 0%,
         ${palette.skyMid} 20%,
         ${palette.skyLow} 38%,
-        rgba(240,248,246,.92) 50%,
-        rgba(240,248,246,.55) 60%,
-        rgba(240,248,246,.18) 72%,
+        rgba(240,248,246,.93) 56%,
+        rgba(240,248,246,.62) 66%,
+        rgba(240,248,246,.18) 76%,
         rgba(240,248,246,.10) 88%,
         rgba(240,248,246,.30) 100%);
   }
@@ -304,20 +309,20 @@ ${fontFaceCss()}
   .tier { border-radius: 4mm; overflow: hidden; background: ${palette.card};
     box-shadow: 0 1.5mm 5mm rgba(23,86,96,.22); display: flex; flex-direction: column; }
   .tier.rec { box-shadow: 0 2mm 8mm rgba(46,157,168,.34); margin-top: -5mm; }
-  .tier .ribbon { background: ${palette.seaDeep}; color: #fff; font-size: 9.5pt; font-weight: 700; padding: 2.2mm; text-align: center; }
+  .tier .ribbon { background: ${palette.seaDeep}; color: #fff; font-size: 10.5pt; font-weight: 700; padding: 2.2mm; text-align: center; }
   .tier .top { position: relative; height: 36mm; overflow: hidden; background: ${palette.seaDeep}; }
   .tier .top img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .tier .top .veil { position: absolute; inset: 0; background: linear-gradient(to top, rgba(23,86,96,.88) 0%, rgba(23,86,96,.20) 74%); }
   .tier .top .name { position: absolute; inset-inline: 4.5mm; bottom: 3.5mm; color: #fff; }
-  .tier .top h4 { margin: 0; font-size: 15pt; font-weight: 700; line-height: 1.2; }
-  .tier .top .stars { color: ${palette.sun}; font-size: 9.5pt; margin-top: .6mm; }
+  .tier .top h4 { margin: 0; font-size: 16pt; font-weight: 700; line-height: 1.2; }
+  .tier .top .stars { color: ${palette.sun}; font-size: 10.5pt; margin-top: .6mm; }
   .tier .body { padding: 5mm 4.5mm 6mm; display: flex; flex-direction: column; flex: 1; }
   .tier .price { font-family: ${fonts.display}; font-size: 27pt; color: ${palette.sand}; line-height: 1.05; font-variant-numeric: tabular-nums; margin: 0; }
-  .tier .per { font-size: 8.5pt; color: ${palette.muted}; margin: 1mm 0 4mm; font-variant-numeric: tabular-nums; }
-  .tier .hotel { font-size: 9pt; color: ${palette.ink2}; margin: 0 0 3.5mm; padding-bottom: 3mm; border-bottom: 0.2mm solid ${palette.lineSoft}; }
-  .tier ul { margin: 0; padding: 0; list-style: none; font-size: 9pt; color: ${palette.ink2}; }
+  .tier .per { font-size: 9.5pt; color: ${palette.muted}; margin: 1mm 0 4mm; font-variant-numeric: tabular-nums; }
+  .tier .hotel { font-size: 10pt; color: ${palette.ink2}; margin: 0 0 3.5mm; padding-bottom: 3mm; border-bottom: 0.2mm solid ${palette.lineSoft}; }
+  .tier ul { margin: 0; padding: 0; list-style: none; font-size: 10pt; color: ${palette.ink2}; }
   .tier ul li { display: grid; grid-template-columns: 4.5mm 1fr; gap: 1.5mm; align-items: start; margin-bottom: 1.7mm; line-height: 1.45; }
-  .tier ul li::before { content: "✓"; color: ${palette.sea}; font-weight: 700; font-size: 9.5pt; }
+  .tier ul li::before { content: "✓"; color: ${palette.sea}; font-weight: 700; font-size: 10.5pt; }
 
   /* ---------------- يشمل / لا يشمل / عملي ---------------- */
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
@@ -329,11 +334,11 @@ ${fontFaceCss()}
     border-top: 1mm solid ${palette.sea};
   }
   .box.exc { border-top-color: ${palette.sand}; }
-  .box h4 { margin: 0 0 3mm; font-size: 11.5pt; font-weight: 700; }
+  .box h4 { margin: 0 0 3mm; font-size: 12.5pt; font-weight: 700; }
   .box.inc h4 { color: ${palette.seaDeep}; }
   .box.exc h4 { color: ${palette.sand}; }
   .box li span { color: ${palette.ink}; }
-  .box ul { margin: 0; padding: 0; list-style: none; font-size: 9.5pt; color: ${palette.ink2}; }
+  .box ul { margin: 0; padding: 0; list-style: none; font-size: 10.8pt; color: ${palette.ink2}; }
   .box li { display: grid; grid-template-columns: 5mm 1fr; gap: 1.5mm; align-items: start; margin-bottom: 1.9mm; line-height: 1.5; }
   .box.inc li::before { content: "✓"; color: ${palette.sea}; font-weight: 700; }
   .box.exc li::before { content: "✕"; color: ${palette.sand}; font-weight: 700; }
@@ -344,19 +349,19 @@ ${fontFaceCss()}
     box-shadow: 0 1mm 3.5mm rgba(23,86,96,.18);
     border-inline-start: 0.8mm solid ${palette.sea};
   }
-  .fact b { display: block; font-size: 9pt; color: ${palette.sea}; margin-bottom: 1mm; }
-  .fact span { font-size: 9.8pt; color: ${palette.ink2}; line-height: 1.55; }
+  .fact b { display: block; font-size: 10pt; color: ${palette.sea}; margin-bottom: 1mm; }
+  .fact span { font-size: 10.8pt; color: ${palette.ink2}; line-height: 1.6; }
 
   /* ---------------- الدفع والشروط ---------------- */
   .pay { display: flex; gap: 4mm; margin-bottom: 8mm; }
   .paystep { flex: 1; background: #fff; border-radius: 3mm; padding: 5mm; text-align: center;
     box-shadow: 0 1mm 4mm rgba(23,86,96,.20); border-top: 1mm solid ${palette.sea}; }
-  .paystep small { display: block; font-size: 8.5pt; color: ${palette.muted}; }
+  .paystep small { display: block; font-size: 9.5pt; color: ${palette.muted}; }
   .paystep b { display: block; font-family: ${fonts.display}; font-size: 19pt; color: ${palette.sand};
     font-variant-numeric: tabular-nums; margin: 1mm 0; }
-  .paystep span { font-size: 9pt; color: ${palette.ink2}; }
+  .paystep span { font-size: 10pt; color: ${palette.ink2}; }
 
-  ul.terms { margin: 0; padding-inline-start: 5mm; font-size: 9.5pt; color: ${palette.ink2}; }
+  ul.terms { margin: 0; padding-inline-start: 5mm; font-size: 10.8pt; color: ${palette.ink2}; }
   ul.terms li { margin-bottom: 1.6mm; }
 
   .cta { margin-top: 8mm; position: relative; overflow: hidden; flex: 1; min-height: 62mm;
@@ -364,10 +369,10 @@ ${fontFaceCss()}
   .cta img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .cta .scrim { position: absolute; inset: 0; background: rgba(23,86,96,.78); }
   .cta .inner { position: relative; }
-  .cta p { margin: 0 0 2mm; font-size: 11pt; color: rgba(255,255,255,.88); }
+  .cta p { margin: 0 0 2mm; font-size: 12pt; color: rgba(255,255,255,.88); }
   .cta .wa { font-family: ${fonts.display}; font-size: 26pt; font-weight: 700; color: ${palette.sun};
     direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; line-height: 1.3; }
-  .cta small { display: block; margin-top: 2mm; font-size: 9pt; color: rgba(255,255,255,.72); }
+  .cta small { display: block; margin-top: 2mm; font-size: 10pt; color: rgba(255,255,255,.72); }
 </style>
 </head>
 <body>
