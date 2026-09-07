@@ -67,7 +67,10 @@ export interface Hotel {
   id: number;
   destination: string;
   name: string;
+  /** خانة الفئة التي يملأها الفندق في التوليد: 3 | 4 | 5 | cabin. */
   class: string;
+  /** تصنيفه الحقيقي — وهو وحده ما يظهر في مستند الزبون. */
+  stars: string;
   rate_normal: number;
   rate_high: number;
   /** فرق السرير الثالث لليلة، بالسنت. */
@@ -133,7 +136,7 @@ export const setDestinationRate = (slug: string, field: DestRateField, cents: nu
 /* ------------------------------- الفنادق ------------------------------- */
 
 export const listHotels = (destination: string) => sql<Hotel[]>`
-  select id, destination, name, class, rate_normal, rate_high, rate_triple
+  select id, destination, name, class, stars, rate_normal, rate_high, rate_triple
   from hotels where destination = ${destination} and active
   order by rate_normal`;
 
@@ -145,9 +148,9 @@ export const hotelsByClass = async (destination: string) => {
 };
 
 export const addHotel = (h: Omit<Hotel, 'id'>) => sql`
-  insert into hotels (destination, name, class, rate_normal, rate_high, rate_triple)
-  values (${h.destination}, ${h.name}, ${h.class}, ${h.rate_normal}, ${h.rate_high},
-          ${h.rate_triple})`;
+  insert into hotels (destination, name, class, stars, rate_normal, rate_high, rate_triple)
+  values (${h.destination}, ${h.name}, ${h.class}, ${h.stars || h.class},
+          ${h.rate_normal}, ${h.rate_high}, ${h.rate_triple})`;
 
 export const setHotelRates = (id: number, normal: number, high: number, triple?: number) =>
   triple === undefined
@@ -162,6 +165,43 @@ export const addCar = (destination: string, kind: string, name: string, rateDay:
 
 export const deactivateHotel = (id: number) =>
   sql`update hotels set active = false where id = ${id}`;
+
+/* ---------------------- الخدمات الإضافية ---------------------- */
+
+/**
+ * خدمة متغيّرة العدد لكل وجهة. الأعمدة الثابتة في destinations تكفي لوجهة
+ * فيها مطار واحد؛ إسطنبول فيها مطاران بسعرين لكل منهما، فصارت صفوفاً.
+ */
+export interface Service {
+  id: number;
+  destination: string;
+  name: string;
+  price: number;
+  /** per_trip | per_night | per_person | once */
+  unit: string;
+}
+
+export const SERVICE_UNITS: Record<string, string> = {
+  per_trip: 'لكل نقلة',
+  per_night: 'لكل ليلة',
+  per_person: 'للشخص',
+  once: 'مرة واحدة',
+};
+
+export const listServices = (destination: string) => sql<Service[]>`
+  select id, destination, name, price, unit
+  from services where destination = ${destination} and active
+  order by sort_order, id`;
+
+export const addService = (destination: string, name: string, price: number, unit: string) =>
+  sql`insert into services (destination, name, price, unit)
+      values (${destination}, ${name}, ${price}, ${unit})`;
+
+export const setServicePrice = (id: number, price: number) =>
+  sql`update services set price = ${price} where id = ${id}`;
+
+export const deactivateService = (id: number) =>
+  sql`update services set active = false where id = ${id}`;
 
 /* ------------------------------ السيارات ------------------------------ */
 

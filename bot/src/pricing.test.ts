@@ -28,9 +28,9 @@ test('الطفل من ست فأكثر يحوّل غرفة إلى ثلاثية ل
 
 test('الأطفال الزائدون عن عدد الغرف تُفتح لهم غرف', () => {
   // بالغان وطفلان: غرفة ثلاثية + غرفة للطفل الثاني
-  assert.deepEqual(planRooms(2, 2), { rooms: 2, triples: 1, payingPax: 4 });
+  assert.deepEqual(planRooms(2, 2), { rooms: 2, triples: 0, payingPax: 4 });
   // أربعة بالغين وثلاثة أطفال: غرفتان ثلاثيتان + غرفة للثالث
-  assert.deepEqual(planRooms(4, 3), { rooms: 3, triples: 2, payingPax: 7 });
+  assert.deepEqual(planRooms(4, 3), { rooms: 3, triples: 1, payingPax: 7 });
 });
 
 test('مدخلات فاسدة لا تكسر التوزيع', () => {
@@ -75,24 +75,24 @@ const trabzon: QuoteInput = {
 test('الحالة المرجعية: كل بند محسوب يدوياً', () => {
   const r = quote(trabzon);
 
-  // غرفتان (بالغان + طفلان)، إحداهما ثلاثية
-  assert.deepEqual(r.plan, { rooms: 2, triples: 1, payingPax: 4 });
+  // غرفتان مزدوجتان: البالغان في واحدة والطفلان في الأخرى، بلا سرير إضافي
+  assert.deepEqual(r.plan, { rooms: 2, triples: 0, payingPax: 4 });
 
-  // الإقامة: (8500×2 غرفة + 3000×1 سرير) × 6 ليالٍ = 120000، × 115٪ = 138000
-  assert.equal(r.lines.find((l) => l.key === 'hotel')?.amount, 138_000);
+  // الإقامة: 8500 × غرفتين × 6 ليالٍ = 102000، × 115٪ للموسم المرتفع = 117300
+  assert.equal(r.lines.find((l) => l.key === 'hotel')?.amount, 117_300);
   assert.equal(r.lines.find((l) => l.key === 'car')?.amount, 47_500);
   assert.equal(r.lines.find((l) => l.key === 'transfer')?.amount, 9_000);
   assert.equal(r.lines.find((l) => l.key === 'tours')?.amount, 30_000);
   assert.equal(r.lines.find((l) => l.key === 'tickets')?.amount, 4_800);
 
-  assert.equal(r.cost, 229_300);
-  assert.equal(r.markup, 50_446);
-  assert.equal(r.fees, 6_994);
-  assert.equal(r.sell, 287_000);
-  assert.equal(r.rounding, 260);
-  assert.equal(r.profit, 57_700);
-  assert.equal(r.perAdult, 143_500);
-  assert.equal(r.deposit, 86_100);
+  assert.equal(r.cost, 208_600);
+  assert.equal(r.markup, 45_892);
+  assert.equal(r.fees, 6_362);
+  assert.equal(r.sell, 261_000);
+  assert.equal(r.rounding, 146);
+  assert.equal(r.profit, 52_400);
+  assert.equal(r.perAdult, 130_500);
+  assert.equal(r.deposit, 78_300);
   assert.equal(r.payingPax, 4);
 });
 
@@ -159,7 +159,7 @@ test('ثلاث فئات من برنامج واحد', () => {
   };
   const [eco, prem, vip] = threeTiers(trabzon, rates);
 
-  assert.equal(prem?.sell, 287_000, 'فئة مميز تطابق الحالة المرجعية تماماً');
+  assert.equal(prem?.sell, 261_000, 'فئة مميز تطابق الحالة المرجعية تماماً');
   assert.ok(eco!.sell < prem!.sell && prem!.sell < vip!.sell, 'الأسعار لا تتصاعد');
 
   // VIP يشمل مرشداً طوال أيام البرنامج دون أن يطلبه المستخدم
@@ -200,4 +200,26 @@ test('المدخلات السالبة أو الفارغة لا تكسر الحس
   assert.ok(r.cost >= 0);
   assert.ok(r.sell >= 0);
   assert.ok(Number.isInteger(r.perAdult), 'القسمة على صفر بالغين لا تُنتج NaN');
+});
+
+test('برنامجا إسطنبول الحقيقيان يطابقان التكلفة المرسلة', () => {
+  // ورقة الأسعار السارية من 2026-09-07: فندق Four Sides بـ 60$ للغرفة المزدوجة
+  // في الليلة، السرير الثالث 20$، نقلتا مطار بـ 50$ للنقلة، وثلاث جولات داخل
+  // إسطنبول بـ 100$ للجولة. الأرقام أدناه تكلفة صافية بلا هامش ولا رسوم.
+  const base = {
+    nights: 6, season: 'normal' as const,
+    hotelRate: 6_000, tripleExtra: 2_000, hotelNights: 6,
+    carRate: 0, carDays: 0,
+    transfers: 2, transferRate: 5_000,
+    tours: [1, 2, 3].map((i) => ({ name: `جولة ${i}`, price: 10_000 })),
+    ticketPerPerson: 0, guideDays: 0, guideRate: 0,
+    simPerPerson: 0, dinnerPerPerson: 0, miscTotal: 0,
+    marginPct: 0, feesBp: 0, depositPct: 30, roundTo: 1,
+  };
+
+  // شخصان: غرفة واحدة — 6×60 + 2×50 + 3×100
+  assert.equal(quote({ ...base, adults: 2, childrenFree: 0, childrenBed: 0 }).cost, 76_000);
+
+  // شخصان وطفلان: غرفتان مزدوجتان بلا سرير إضافي — 6×120 + 2×50 + 3×100
+  assert.equal(quote({ ...base, adults: 2, childrenFree: 0, childrenBed: 2 }).cost, 112_000);
 });

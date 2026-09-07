@@ -383,10 +383,11 @@ async function buildOffers(s: Session): Promise<Built | null> {
     itinerary: buildDays(d.nights, tours, route),
     route: splitNights(route, d.nights),
     practical: parsePractical(dest.practical),
+    // النجوم الحقيقية لا خانة الفئة: فندق أربع نجوم قد يملأ الخانة الاقتصادية
     hotelClasses: {
-      economy: hotelFor('economy').class,
-      premium: hotelFor('premium').class,
-      vip: hotelFor('vip').class,
+      economy: hotelFor('economy').stars,
+      premium: hotelFor('premium').stars,
+      vip: hotelFor('vip').stars,
     },
   };
 }

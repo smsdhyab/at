@@ -40,9 +40,11 @@ test('كل وجهة كاملة: فنادق الفئات الثلاث وسيار�
   for (const dest of await db!.listDestinations()) {
     const { three, four, five } = await db!.hotelsByClass(dest.slug);
     assert.ok(three && four && five, `${dest.slug}: تنقصه فئة فندق`);
-    assert.ok(three.rate_normal < four.rate_normal, `${dest.slug}: 3 نجوم ليست أرخص من 4`);
-    assert.ok(four.rate_normal < five.rate_normal, `${dest.slug}: 4 نجوم ليست أرخص من 5`);
-    assert.ok(four.rate_high > four.rate_normal, `${dest.slug}: سعر الموسم المرتفع ليس أعلى`);
+    // التساوي مقبول: فندقان حقيقيان قد يتقاربان في السعر رغم اختلاف الخانة،
+    // وفندق قد يبيع بسعر واحد طوال السنة. المرفوض هو التراجع فقط.
+    assert.ok(three.rate_normal <= four.rate_normal, `${dest.slug}: الاقتصادي أغلى من المميز`);
+    assert.ok(four.rate_normal <= five.rate_normal, `${dest.slug}: المميز أغلى من VIP`);
+    assert.ok(four.rate_high >= four.rate_normal, `${dest.slug}: الموسم المرتفع أرخص من العادي`);
 
     for (const kind of ['sedan', 'van', 'vip']) {
       assert.ok(await db!.carByKind(dest.slug, kind), `${dest.slug}: تنقصه سيارة ${kind}`);

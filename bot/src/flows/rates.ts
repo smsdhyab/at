@@ -94,9 +94,16 @@ async function showServices(ctx: Context, slug: string): Promise<void> {
   const kb = new InlineKeyboard()
     .text(`نقلة المطار — ${fmt(dest.transfer_rate)}`, `r:es:${slug}:transfer_rate`).row()
     .text(`تذكرة الدخول للشخص — ${fmt(dest.ticket_pp)}`, `r:es:${slug}:ticket_pp`).row()
-    .text(`يوم المرشد — ${fmt(dest.guide_rate)}`, `r:es:${slug}:guide_rate`).row()
-    .text('◀️ رجوع', `r:d:${slug}`);
-  await ctx.editMessageText('<b>الخدمات الثابتة</b>', { parse_mode: 'HTML', reply_markup: kb });
+    .text(`يوم المرشد — ${fmt(dest.guide_rate)}`, `r:es:${slug}:guide_rate`).row();
+  for (const x of await db.listServices(slug)) {
+    kb.text(`${x.name} — ${fmt(x.price)} ${db.SERVICE_UNITS[x.unit] ?? ''}`, `r:ex:${x.id}`).row();
+  }
+  kb.text('➕ أضف خدمة', `r:as:${slug}`).row().text('◀️ رجوع', `r:d:${slug}`);
+  await ctx.editMessageText(
+    '<b>الخدمات</b>\nالثلاث الأولى ثابتة لكل وجهة ويستعملها المحرّك تلقائياً.' +
+      '\nما تحتها خدمات إضافية تُضاف إلى العرض عند الحاجة.',
+    { parse_mode: 'HTML', reply_markup: kb },
+  );
 }
 
 /** يفصل «جولة أوزنجول 90» إلى اسم وسعر. */
@@ -145,6 +152,39 @@ export async function handleRatesStep(ctx: Context, s: Session, text: string): P
         await ctx.reply(`✅ تم — ${SERVICE_LABEL[field!]} = ${fmt(cents)}`);
       }
       await clearStep(s);
+      return true;
+    }
+
+    case 'r.extraService': {
+      const cents = toCents(text);
+      if (cents <= 0) {
+        await ctx.reply('اكتب رقماً بالدولار، مثل: <code>45</code>', { parse_mode: 'HTML' });
+        return true;
+      }
+      await db.setServicePrice(Number(arg), cents);
+      await clearStep(s);
+      await ctx.reply(`✅ تم — ${fmt(cents)}`);
+      return true;
+    }
+
+    case 'r.addService': {
+      // الصيغة: الاسم | السعر | الوحدة
+      const parts = text.split('|').map((x) => x.trim());
+      const name = parts[0];
+      const price = toCents(parts[1] ?? '0');
+      const unit = (parts[2] ?? 'per_trip').toLowerCase();
+      if (!name || price <= 0 || !db.SERVICE_UNITS[unit]) {
+        await ctx.reply(
+          'الصيغة: <code>الاسم | السعر | الوحدة</code>\n' +
+            'الوحدة واحدة من: per_trip · per_night · per_person · once\n\n' +
+            'مثال:\n<code>نقلة مطار صبيحة | 45 | per_trip</code>',
+          { parse_mode: 'HTML' },
+        );
+        return true;
+      }
+      await db.addService(arg, name, price, unit);
+      await clearStep(s);
+      await ctx.reply(`✅ أُضيفت «${name}» — ${fmt(price)} ${db.SERVICE_UNITS[unit]}`);
       return true;
     }
 
@@ -199,8 +239,9 @@ export async function handleRatesStep(ctx: Context, s: Session, text: string): P
         );
         return true;
       }
+      // النجوم تساوي الخانة عند الإضافة من البوت؛ تُعدَّل من القاعدة إن اختلفتا
       await db.addHotel({
-        destination: arg, name, class: cls,
+        destination: arg, name, class: cls, stars: cls,
         rate_normal: normal, rate_high: high, rate_triple: triple,
       });
       await clearStep(s);
@@ -264,6 +305,23 @@ export async function handleRatesCallback(ctx: Context, parts: string[]): Promis
       await ctx.answerCallbackQuery();
       await expectStep(s, 'r.service', `${a}|${b}`);
       await ctx.reply(`السعر الجديد لـ «${SERVICE_LABEL[b ?? '']}» بالدولار:`);
+      return true;
+
+    case 'ex':
+      await ctx.answerCallbackQuery();
+      await expectStep(s, 'r.extraService', a!);
+      await ctx.reply('السعر الجديد بالدولار:');
+      return true;
+
+    case 'as':
+      await ctx.answerCallbackQuery();
+      await expectStep(s, 'r.addService', a!);
+      await ctx.reply(
+        'اكتب بيانات الخدمة:\n<code>الاسم | السعر | الوحدة</code>\n\n' +
+          'الوحدة: per_trip أو per_night أو per_person أو once\n\n' +
+          'مثال:\n<code>نقلة مطار صبيحة | 45 | per_trip</code>',
+        { parse_mode: 'HTML' },
+      );
       return true;
 
     case 'at':

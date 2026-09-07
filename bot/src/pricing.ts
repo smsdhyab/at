@@ -97,17 +97,22 @@ export interface RoomPlan {
  * الأطفال عن عدد الغرف المتاحة، يُفتح لهم غرف إضافية.
  *
  * من هم دون السادسة لا يدخلون الحساب إطلاقاً: لا سرير ولا تذكرة ولا خدمة.
+ *
+ * السرير الثالث يُحتسب على من لا يجد مكاناً في غرفة مزدوجة، لا على كل طفل:
+ * بالغان وطفلان يسكنان غرفتين مزدوجتين بلا سرير إضافي إطلاقاً. احتساب سرير
+ * ثالث مع فتح غرفة ثانية ازدواج في الحساب — الغرفة الثانية تتسع للطفل أصلاً.
  */
 export function planRooms(adults: number, childrenBed: number): RoomPlan {
   const a = Math.max(1, Math.floor(adults) || 0);
   const kids = Math.max(0, Math.floor(childrenBed) || 0);
 
   const baseRooms = Math.ceil(a / 2);
-  const triples = Math.min(kids, baseRooms);
-  const leftover = kids - triples;
-  const extraRooms = Math.ceil(leftover / 2);
+  const inParentRooms = Math.min(kids, baseRooms);
+  const rooms = baseRooms + Math.ceil((kids - inParentRooms) / 2);
+  // الأسرّة المزدوجة تستوعب غرفتين لكل شخصين؛ الباقي فقط يحتاج سريراً ثالثاً
+  const triples = Math.max(0, a + kids - rooms * 2);
 
-  return { rooms: baseRooms + extraRooms, triples, payingPax: a + kids };
+  return { rooms, triples, payingPax: a + kids };
 }
 
 export interface QuoteLine {
