@@ -103,6 +103,30 @@
   table.lines tr.profit td { color: var(--sea-deep); font-weight: 700; }
 
   .empty { color: var(--ink2); text-align: center; padding: 30px 10px; }
+  #tiers { display: grid; gap: 12px; }
+  .bar { margin-top: 4px; }
+  .bar .btn { width: 100%; font-size: 17px; min-height: 52px; }
+  .btn:disabled { background: var(--muted); cursor: not-allowed; }
+  .btn.ghost { background: #fff; color: var(--sea-deep); border: 1px solid var(--line); }
+  .rhead { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .rhead h2 { font-family: var(--display); font-size: 20px; color: var(--sea-deep); margin: 0; }
+  .rhead .rsum { font-size: 13px; color: var(--ink2); }
+  #edit { display: none; }
+
+  /* الهاتف: زر الحساب مثبّت أسفل الشاشة؛ وبعد الحساب تحلّ النتائج محل النموذج */
+  @media (max-width: 860px) {
+    body { padding-bottom: 84px; }
+    .bar { position: fixed; inset-inline: 0; bottom: 0; z-index: 5; margin: 0;
+      padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+      background: rgba(253,250,246,.94); backdrop-filter: blur(8px); border-top: 1px solid var(--line); }
+    body.results-mode { padding-bottom: 0; }
+    body.results-mode form, body.results-mode .bar, #placeholder { display: none; }
+    #edit { display: inline-flex; }
+    .tiers { position: static; }
+    .check.svc { grid-template-columns: auto 1fr auto; }
+    .check.svc .qty { grid-column: 2 / -1; justify-self: start; }
+    header h1 { font-size: 26px; }
+  }
   .error { background: #fff3f3; border: 1px solid #e5b5b5; color: #8a2b2b; padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; display: none; }
   footer { margin-top: 30px; color: var(--muted); font-size: 12.5px; text-align: center; }
   [hidden] { display: none !important; }
@@ -118,7 +142,7 @@
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body { background: #fff !important; font-size: 12px; }
     .wrap { padding: 0; max-width: none; }
-    header, form, footer, .int, .error { display: none !important; }
+    header, form, footer, .int, .error, .rhead, .bar, #placeholder { display: none !important; }
     .print-only { display: block !important; }
     .grid { display: block; }
     .tiers { position: static; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -145,10 +169,7 @@
       <h1>حاسبة الأسعار</h1>
       <p>المسافرون العرب · أداة داخلية — الأسعار تُقرأ من القاعدة مباشرة، ونفس محرك البوت يحسب</p>
     </div>
-    <div class="actions">
-      <span class="pill" id="status">يحمّل الأسعار…</span>
-      <button type="button" class="btn" id="pdf" hidden>⬇ تصدير PDF</button>
-    </div>
+    <span class="pill" id="status">يحمّل الأسعار…</span>
   </header>
 
   <div class="error" id="error"></div>
@@ -171,7 +192,7 @@
         <div class="row">
           <label class="f"><span><b>المغادرة</b></span><input type="date" name="depart"></label>
           <label class="f"><span><b>العودة</b></span><input type="date" name="ret"></label>
-          <label class="f"><span><b>الليالي</b></span><input type="number" name="nights" min="1" max="60" value="6" inputmode="numeric"></label>
+          <label class="f"><span><b>الليالي</b></span><input type="number" name="nights" min="1" max="60" placeholder="6" inputmode="numeric"></label>
         </div>
         <p class="hint" id="seasonHint"></p>
       </fieldset>
@@ -179,7 +200,7 @@
       <fieldset class="card">
         <legend>المسافرون</legend>
         <div class="row">
-          <label class="f"><span><b>البالغون</b></span><input type="number" name="adults" min="1" max="20" value="2" inputmode="numeric"></label>
+          <label class="f"><span><b>البالغون</b></span><input type="number" name="adults" min="1" max="20" placeholder="2" inputmode="numeric"></label>
           <label class="f"><span><b>أطفال دون 6</b> · مجاناً</span><input type="number" name="kidsFree" min="0" max="10" value="0" inputmode="numeric"></label>
           <label class="f"><span><b>أطفال 6 فأكثر</b> · سرير</span><input type="number" name="kidsBed" min="0" max="10" value="0" inputmode="numeric"></label>
         </div>
@@ -246,10 +267,20 @@
           </div>
         </details>
       </fieldset>
+
+      <div class="bar"><button type="button" class="btn" id="calc" disabled>احسب السعر</button></div>
     </form>
 
-    <section class="tiers" id="tiers">
-      <div class="card empty">النتائج تظهر هنا بعد تحميل الأسعار</div>
+    <div class="card empty" id="placeholder">املأ بيانات الرحلة ثم اضغط «احسب السعر»</div>
+    <section class="tiers" id="results" hidden>
+      <div class="rhead card">
+        <div><h2>النتائج</h2><div class="rsum" id="rsum"></div></div>
+        <div class="actions">
+          <button type="button" class="btn ghost" id="edit">✏️ تعديل البيانات</button>
+          <button type="button" class="btn" id="pdf">⬇ تصدير PDF</button>
+        </div>
+      </div>
+      <div id="tiers"></div>
     </section>
   </div>
 
@@ -379,12 +410,7 @@ function compute() {
   const kidsFree = Math.max(0, int('kidsFree'));
   const kidsBed = Math.max(0, int('kidsBed'));
   const plan = planRooms(adults, kidsBed);
-  $('#roomsHint').textContent =
-    `${plan.rooms} غرفة${plan.triples ? ` — منها ${plan.triples} بسرير إضافي` : ''} · ${plan.payingPax} محسوبون` +
-    (kidsFree ? ` · ${kidsFree} مجاناً` : '');
-
-  if (form.elements.carDays.value === '') form.elements.carDays.value = Math.max(0, nights - 1);
-  const carDays = Math.max(0, int('carDays'));
+  const carDays = form.elements.carDays.value === '' ? Math.max(0, nights - 1) : Math.max(0, int('carDays'));
 
   const hotelFor = (t) => hotels.find((h) => h.id === Number(v(`h_${t}`))) ?? hotels[0];
   const carFor = (kind) => cars.find((c) => c.kind === kind);
@@ -492,6 +518,7 @@ function render(offers, { hotelFor, svcLines, sum }) {
     sum.kidsFree ? `${sum.kidsFree} دون السادسة مجاناً` : '',
     `${sum.rooms} غرفة${sum.triples ? ` منها ${sum.triples} بسرير إضافي` : ''}`,
   ].filter(Boolean).join(' · ');
+  $('#rsum').textContent = `${sum.dest} · ${sum.nights} ليالٍ · ${who}`;
   const when = sum.depart && sum.ret ? `من ${fmtDate(sum.depart)} إلى ${fmtDate(sum.ret)} · ` : '';
   $('#printHead').innerHTML = `
     <div class="ph-brand"><b>المسافرون العرب</b><span>alarabtravelers.com · واتساب ‎+966 53 443 6932‎</span></div>
@@ -504,14 +531,50 @@ function render(offers, { hotelFor, svcLines, sum }) {
 
 /* ------------------------------ الربط ------------------------------ */
 
+// السعر لا يظهر قبل إدخال البيانات والضغط على «احسب» — بعدها يتحدّث مع كل تعديل
+let computed = false;
+
+function updateHints() {
+  const adults = int('adults'), kidsBed = Math.max(0, int('kidsBed')), kidsFree = Math.max(0, int('kidsFree'));
+  if (adults >= 1) {
+    const plan = planRooms(adults, kidsBed);
+    $('#roomsHint').textContent =
+      `${plan.rooms} غرفة${plan.triples ? ` — منها ${plan.triples} بسرير إضافي` : ''} · ${plan.payingPax} محسوبون` +
+      (kidsFree ? ` · ${kidsFree} مجاناً` : '');
+  } else {
+    $('#roomsHint').textContent = '';
+  }
+  $('#calc').disabled = !(int('nights') >= 1 && adults >= 1);
+}
+
 form.addEventListener('input', (e) => {
   const n = e.target.name;
-  if (n === 'dest') { fillDestinationDependent(); form.elements.carDays.value = ''; }
+  if (n === 'dest') fillDestinationDependent();
   if (n === 'depart' || n === 'ret' || n === 'season') { syncNights(); fillDestinationDependent(); }
-  if (n === 'nights') form.elements.carDays.value = '';
-  compute();
+  if (n === 'nights' || n === 'depart' || n === 'ret' || n === 'dest') {
+    form.elements.carDays.value = int('nights') >= 1 ? Math.max(0, int('nights') - 1) : '';
+  }
+  updateHints();
+  if (computed) compute();
 });
-form.addEventListener('change', (e) => { if (e.target.name === 'dest' || e.target.name === 'season') { fillDestinationDependent(); compute(); } });
+form.addEventListener('change', (e) => {
+  if (e.target.name === 'dest' || e.target.name === 'season') fillDestinationDependent();
+  updateHints();
+  if (computed) compute();
+});
+
+$('#calc').addEventListener('click', () => {
+  computed = true;
+  compute();
+  $('#placeholder').hidden = true;
+  $('#results').hidden = false;
+  document.body.classList.add('results-mode');
+  $('#results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+$('#edit').addEventListener('click', () => {
+  document.body.classList.remove('results-mode');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 
 $('#pdf').addEventListener('click', () => {
   document.title = `عرض ${lastSum?.dest ?? ''} ${lastSum?.nights ?? ''} ليالٍ — المسافرون العرب`;
@@ -524,10 +587,9 @@ try {
   fillDestinations();
   syncNights();
   fillDestinationDependent();
-  compute();
+  updateHints();
   status.textContent = `الأسعار محمّلة · ${DB.destinations.length} وجهات`;
   status.className = 'pill ok';
-  $('#pdf').hidden = false;
 } catch (err) {
   status.textContent = 'تعذّر تحميل الأسعار';
   status.className = 'pill err';
