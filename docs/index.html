@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>حاسبة الأسعار — المسافرون العرب</title>
+<link rel="icon" href="data:,">
 <style>
   /* الخطوط من bot/assets عبر npm run calc:build */
   @font-face { font-family: "Thmanyah Display"; src: url(fonts/thmanyah-display-Bold.woff2) format("woff2"); font-weight: 700; font-display: swap; }
@@ -105,6 +106,36 @@
   .error { background: #fff3f3; border: 1px solid #e5b5b5; color: #8a2b2b; padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; display: none; }
   footer { margin-top: 30px; color: var(--muted); font-size: 12.5px; text-align: center; }
   [hidden] { display: none !important; }
+  .btn { font: inherit; font-weight: 700; font-size: 15px; color: #fff; background: var(--sea-deep); border: 0; border-radius: 10px; padding: 10px 16px; min-height: 44px; cursor: pointer; }
+  .btn:hover { background: var(--sea); }
+  .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .print-only { display: none; }
+
+  /* الطباعة = نسخة الزبون: أسعار البيع وما يشمله العرض فقط.
+     كل ما يحمل التكلفة أو الهامش أو الربح موسوم .int ولا يُطبع أبداً. */
+  @media print {
+    @page { size: A4; margin: 12mm; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { background: #fff !important; font-size: 12px; }
+    .wrap { padding: 0; max-width: none; }
+    header, form, footer, .int, .error { display: none !important; }
+    .print-only { display: block !important; }
+    .grid { display: block; }
+    .tiers { position: static; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .tier { break-inside: avoid; padding: 10px 12px; border-radius: 8px; }
+    .tier .sell { font-size: 26px; }
+    .tier .sub { font-size: 11px; gap: 10px; }
+    .tier .hotel { font-size: 12px; }
+    .inc { margin: 8px 0 0; padding: 0 14px 0 0; font-size: 11.5px; color: var(--ink2); line-height: 1.55; }
+    .inc li { margin: 2px 0; }
+    #printHead { margin-bottom: 12px; }
+    .ph-brand { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid var(--sea); padding-bottom: 6px; margin-bottom: 10px; }
+    .ph-brand b { font-family: var(--display); font-size: 20px; color: var(--sea-deep); }
+    .ph-brand span { font-size: 11.5px; color: var(--ink2); }
+    #printHead h2 { font-family: var(--display); font-size: 18px; margin: 0 0 4px; color: var(--sea-deep); }
+    #printHead p { margin: 0; color: var(--ink2); font-size: 12px; }
+    .pf { margin-top: 12px; font-size: 10.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 6px; }
+  }
 </style>
 </head>
 <body>
@@ -114,10 +145,14 @@
       <h1>حاسبة الأسعار</h1>
       <p>المسافرون العرب · أداة داخلية — الأسعار تُقرأ من القاعدة مباشرة، ونفس محرك البوت يحسب</p>
     </div>
-    <span class="pill" id="status">يحمّل الأسعار…</span>
+    <div class="actions">
+      <span class="pill" id="status">يحمّل الأسعار…</span>
+      <button type="button" class="btn" id="pdf" hidden>⬇ تصدير PDF</button>
+    </div>
   </header>
 
   <div class="error" id="error"></div>
+  <section id="printHead" class="print-only"></section>
 
   <div class="grid">
     <form id="f" autocomplete="off" onsubmit="return false">
@@ -218,6 +253,7 @@
     </section>
   </div>
 
+  <p class="pf print-only" id="printFoot"></p>
   <footer>كل المبالغ بالدولار. الحساب بأعداد صحيحة بالسنت — نفس ملف pricing.ts في البوت.</footer>
 </div>
 
@@ -398,22 +434,46 @@ function compute() {
     vip: { hotelRate: rateOf(hotelFor('vip')), tripleExtra: hotelFor('vip')?.rate_triple ?? 0, carRate: carFor('vip')?.rate_day ?? 0, guideIncluded: true, hotelName: hotelFor('vip')?.name, marginPct },
   };
 
-  render(threeTiers(base, rates), { hotelFor, svcLines, adults });
+  const svcNames = [...form.querySelectorAll('input[name=svc]:checked')]
+    .map((i) => DB.services(slug).find((x) => x.id === Number(i.value))?.name).filter(Boolean);
+  const sum = {
+    dest: dest.name, nights, depart: v('depart'), ret: v('ret'),
+    adults, kidsFree, kidsBed, rooms: plan.rooms, triples: plan.triples,
+    transfers: base.transfers, carDays, tourNames: tours.map((t) => t.name),
+    tickets: base.ticketPerPerson > 0, guideDays: base.guideDays, svcNames,
+    depositPct: base.depositPct,
+  };
+  render(threeTiers(base, rates), { hotelFor, svcLines, sum });
 }
 
-function render(offers, { hotelFor, svcLines, adults }) {
+let lastSum = null;
+const fmtDate = (iso) => (iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB') : '');
+
+function render(offers, { hotelFor, svcLines, sum }) {
+  lastSum = sum;
   $('#tiers').innerHTML = offers.map((o) => {
     const h = hotelFor(o.tier);
     const lines = o.lines.map((l) => {
       const detail = l.key === 'extras' && svcLines.length ? `${l.detail} · ${svcLines.join(' · ')}` : l.detail;
       return `<tr><td>${esc(l.label)}<span class="d">${esc(detail)}</span></td><td>${money(l.amount)}</td></tr>`;
     }).join('');
+    // ما يشمله العرض — نص بلا مبالغ، لنسخة الزبون المطبوعة
+    const inc = [
+      `إقامة ${sum.nights} ليالٍ مع الإفطار — ${h?.name ?? ''}`,
+      sum.transfers ? 'استقبال وتوديع المطار' : '',
+      sum.carDays ? `${o.tier === 'vip' ? 'فان VIP' : 'سيارة خاصة'} مع سائق — ${sum.carDays} أيام` : '',
+      ...sum.tourNames,
+      sum.tickets ? 'تذاكر الدخول للأماكن المذكورة' : '',
+      o.tier === 'vip' || sum.guideDays ? 'مرشد عربي' : '',
+      ...sum.svcNames,
+    ].filter(Boolean);
     return `<article class="card tier ${o.tier}">
       <div class="head"><h3>${esc(o.label)}</h3><span class="stars">${starsOf(h)}</span></div>
       <div class="sell">${money(o.sell)}</div>
-      <div class="sub"><span>للبالغ <b>${money(o.perAdult)}</b></span><span>العربون <b>${money(o.deposit)}</b></span><span>الربح <b>${money(o.profit)}</b></span></div>
+      <div class="sub"><span>للبالغ <b>${money(o.perAdult)}</b></span><span>العربون <b>${money(o.deposit)}</b></span><span class="int">الربح <b>${money(o.profit)}</b></span></div>
       <div class="hotel">${esc(h?.name ?? '—')}</div>
-      <details><summary>التفصيل</summary>
+      <ul class="inc print-only">${inc.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+      <details class="int"><summary>التفصيل</summary>
         <table class="lines">${lines}
           <tr class="total"><td>التكلفة</td><td>${money(o.cost)}</td></tr>
           <tr><td>الهامش</td><td>${money(o.markup)}</td></tr>
@@ -425,6 +485,21 @@ function render(offers, { hotelFor, svcLines, adults }) {
       </details>
     </article>`;
   }).join('');
+
+  const who = [
+    `${sum.adults} بالغين`,
+    sum.kidsBed ? `${sum.kidsBed} أطفال` : '',
+    sum.kidsFree ? `${sum.kidsFree} دون السادسة مجاناً` : '',
+    `${sum.rooms} غرفة${sum.triples ? ` منها ${sum.triples} بسرير إضافي` : ''}`,
+  ].filter(Boolean).join(' · ');
+  const when = sum.depart && sum.ret ? `من ${fmtDate(sum.depart)} إلى ${fmtDate(sum.ret)} · ` : '';
+  $('#printHead').innerHTML = `
+    <div class="ph-brand"><b>المسافرون العرب</b><span>alarabtravelers.com · واتساب ‎+966 53 443 6932‎</span></div>
+    <h2>عرض سعر — ${esc(sum.dest)} · ${sum.nights} ليالٍ / ${sum.nights + 1} أيام</h2>
+    <p>${when}${who}</p>`;
+  $('#printFoot').textContent =
+    `الأسعار بالدولار الأمريكي للمجموعة كاملة · العربون ${sum.depositPct}٪ عند التأكيد والباقي قبل الوصول · ` +
+    `العرض صالح 7 أيام من ${new Date().toLocaleDateString('en-GB')} وحسب توفر الفنادق.`;
 }
 
 /* ------------------------------ الربط ------------------------------ */
@@ -438,6 +513,12 @@ form.addEventListener('input', (e) => {
 });
 form.addEventListener('change', (e) => { if (e.target.name === 'dest' || e.target.name === 'season') { fillDestinationDependent(); compute(); } });
 
+$('#pdf').addEventListener('click', () => {
+  document.title = `عرض ${lastSum?.dest ?? ''} ${lastSum?.nights ?? ''} ليالٍ — المسافرون العرب`;
+  window.print();
+});
+window.addEventListener('afterprint', () => { document.title = 'حاسبة الأسعار — المسافرون العرب'; });
+
 try {
   await load();
   fillDestinations();
@@ -446,6 +527,7 @@ try {
   compute();
   status.textContent = `الأسعار محمّلة · ${DB.destinations.length} وجهات`;
   status.className = 'pill ok';
+  $('#pdf').hidden = false;
 } catch (err) {
   status.textContent = 'تعذّر تحميل الأسعار';
   status.className = 'pill err';
