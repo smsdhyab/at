@@ -239,7 +239,7 @@ final class AAT_Packages {
 	}
 
 	private static function wa_number() {
-		return preg_replace( '/\D/', '', self::opt( 'whatsapp', '905013196750' ) );
+		return preg_replace( '/\D/', '', self::opt( 'whatsapp', '966534436932' ) );
 	}
 
 	private static function wa_link( $text ) {
@@ -816,8 +816,8 @@ JS;
 						<td>
 							<input type="text" id="aat_wa" class="regular-text" dir="ltr"
 								name="<?php echo esc_attr( self::OPT ); ?>[whatsapp]"
-								value="<?php echo esc_attr( self::opt( 'whatsapp', '905013196750' ) ); ?>">
-							<p class="description">بالصيغة الدولية بدون + وبدون مسافات، مثال: 905013196750</p>
+								value="<?php echo esc_attr( self::opt( 'whatsapp', '966534436932' ) ); ?>">
+							<p class="description">بالصيغة الدولية بدون + وبدون مسافات، مثال: 966534436932</p>
 						</td>
 					</tr>
 				</table>

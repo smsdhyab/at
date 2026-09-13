@@ -22,7 +22,7 @@
    |---|---|
    | `TELEGRAM_TOKEN` | توكن البوت من @BotFather |
    | `DB_FILE` | `/data/aat.db` |
-   | `WHATSAPP_NUMBER` | `905013196750` |
+   | `WHATSAPP_NUMBER` | `966534436932` |
    | `BRAND_LEGAL_NAME` | الاسم القانوني الكامل |
    | `BRAND_LICENSE` | رقم رخصة الوكالة |
    | `BRAND_ADDRESS` | العنوان |

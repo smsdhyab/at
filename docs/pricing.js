@@ -1,3 +1,5 @@
+// مولَّد آلياً من bot/src/pricing.ts بواسطة npm run calc:build — لا تعدّله هنا.
+// أي تغيير في منطق المال يكون في pricing.ts ثم يُعاد البناء.
 /**
  * محرك التسعير.
  *
@@ -7,92 +9,92 @@
  * وكل ضرب يُقرَّب فوراً إلى سنت صحيح قبل أن يدخل في أي جمع.
  */
 
-export type Season = 'normal' | 'high' | 'peak';
-export type Tier = 'economy' | 'premium' | 'vip';
+                                                
+                                                 
 
 /** معامل الموسم كنسبة مئوية صحيحة. */
-export const SEASON_PCT: Record<Season, number> = { normal: 100, high: 115, peak: 130 };
+export const SEASON_PCT                         = { normal: 100, high: 115, peak: 130 };
 
 /** هامش الربح لكل فئة، نسبة مئوية صحيحة. */
-export const TIER_MARGIN_PCT: Record<Tier, number> = { economy: 18, premium: 22, vip: 28 };
+export const TIER_MARGIN_PCT                       = { economy: 18, premium: 22, vip: 28 };
 
-export const SEASON_LABEL: Record<Season, string> = {
+export const SEASON_LABEL                         = {
   normal: 'عادي',
   high: 'مرتفع',
   peak: 'ذروة',
 };
 
-export const TIER_LABEL: Record<Tier, string> = {
+export const TIER_LABEL                       = {
   economy: 'اقتصادي',
   premium: 'مميز',
   vip: 'VIP',
 };
 
-export interface Tour {
-  name: string;
-  /** سعر الجولة للمجموعة كاملة، بالسنت. */
-  price: number;
-}
+                       
+               
+                                           
+                
+ 
 
-export interface QuoteInput {
-  nights: number;
-  adults: number;
-  /** أطفال أقل من 6 سنوات — مجاناً تماماً: بلا سرير ولا تذكرة ولا خدمة فردية. */
-  childrenFree: number;
-  /** أطفال 6 سنوات فأكثر — يحتاجون سريراً إضافياً وتُحتسب عليهم التذاكر. */
-  childrenBed: number;
-  season: Season;
+                             
+                 
+                 
+                                                                                 
+                       
+                                                                            
+                      
+                 
 
-  /** سعر الغرفة لليلة الواحدة، بالسنت. */
-  hotelRate: number;
-  /** فرق السرير الثالث لليلة الواحدة، بالسنت. */
-  tripleExtra: number;
-  hotelNights: number;
-  hotelName?: string;
+                                          
+                    
+                                                 
+                      
+                      
+                     
 
-  /** سعر السيارة لليوم الواحد، بالسنت. */
-  carRate: number;
-  carDays: number;
+                                          
+                  
+                  
 
-  /** عدد نقلات المطار (استقبال + توديع). */
-  transfers: number;
-  transferRate: number;
+                                            
+                    
+                       
 
-  tours: Tour[];
+                
 
-  /** تذكرة الدخول للشخص الواحد، بالسنت. */
-  ticketPerPerson: number;
+                                           
+                          
 
-  guideDays: number;
-  guideRate: number;
+                    
+                    
 
-  simPerPerson: number;
-  dinnerPerPerson: number;
-  miscTotal: number;
+                       
+                          
+                    
 
-  /** هامش الربح، نسبة مئوية صحيحة. */
-  marginPct: number;
-  /**
-   * هامش ثابت بالسنت على الحجز كله، يحلّ محل النسبة إن كان أكبر من صفر.
-   * الرسوم تُحسب بعده على (التكلفة + الهامش) في الحالتين.
-   */
-  marginFixed?: number;
-  /** رسوم التحويل بأجزاء العشرة آلاف: 250 = 2.5٪. */
-  feesBp: number;
-  /** نسبة العربون، نسبة مئوية صحيحة. */
-  depositPct: number;
-  /** يُقرَّب سعر البيع لأعلى إلى مضاعف هذا المبلغ بالسنت. 0 أو 1 = بلا تقريب. */
-  roundTo: number;
-}
+                                      
+                    
+     
+                                                                        
+                                                          
+     
+                       
+                                                     
+                 
+                                        
+                     
+                                                                                 
+                  
+ 
 
-export interface RoomPlan {
-  /** عدد الغرف المطلوبة. */
-  rooms: number;
-  /** كم غرفة منها ثلاثية (فيها سرير إضافي لطفل). */
-  triples: number;
-  /** من تُحتسب عليهم التذاكر والخدمات الفردية. */
-  payingPax: number;
-}
+                           
+                            
+                
+                                                    
+                  
+                                                  
+                    
+ 
 
 /**
  * توزيع الغرف.
@@ -107,7 +109,7 @@ export interface RoomPlan {
  * بالغان وطفلان يسكنان غرفتين مزدوجتين بلا سرير إضافي إطلاقاً. احتساب سرير
  * ثالث مع فتح غرفة ثانية ازدواج في الحساب — الغرفة الثانية تتسع للطفل أصلاً.
  */
-export function planRooms(adults: number, childrenBed: number): RoomPlan {
+export function planRooms(adults        , childrenBed        )           {
   const a = Math.max(1, Math.floor(adults) || 0);
   const kids = Math.max(0, Math.floor(childrenBed) || 0);
 
@@ -120,47 +122,47 @@ export function planRooms(adults: number, childrenBed: number): RoomPlan {
   return { rooms, triples, payingPax: a + kids };
 }
 
-export interface QuoteLine {
-  key: string;
-  label: string;
-  detail: string;
-  amount: number;
-}
+                            
+              
+                
+                 
+                 
+ 
 
-export interface QuoteResult {
-  lines: QuoteLine[];
-  /** توزيع الغرف الذي بُني عليه السعر. */
-  plan: RoomPlan;
-  /** إجمالي التكلفة على الشركة. */
-  cost: number;
-  /** الزيادة فوق التكلفة (الهامش). */
-  markup: number;
-  /** رسوم التحويل. */
-  fees: number;
-  /** ما أُضيف بسبب التقريب لأعلى. */
-  rounding: number;
-  /** سعر البيع النهائي للمجموعة. */
-  sell: number;
-  /** صافي الربح = سعر البيع − التكلفة. */
-  profit: number;
-  /** نصيب الفرد البالغ من سعر البيع. */
-  perAdult: number;
-  deposit: number;
-  /** عدد الأشخاص الذين تُحتسب عليهم التذاكر والخدمات الفردية. */
-  payingPax: number;
-}
+                              
+                     
+                                          
+                 
+                                   
+               
+                                      
+                 
+                      
+               
+                                     
+                   
+                                    
+               
+                                          
+                 
+                                        
+                   
+                  
+                                                                 
+                    
+ 
 
 /** يضرب مبلغاً بالسنت في نسبة مئوية صحيحة ويعيد سنتاً صحيحاً. */
-function pct(cents: number, percent: number): number {
+function pct(cents        , percent        )         {
   return Math.round((cents * percent) / 100);
 }
 
 /** يضرب مبلغاً بالسنت في نسبة بأجزاء العشرة آلاف ويعيد سنتاً صحيحاً. */
-function bp(cents: number, basisPoints: number): number {
+function bp(cents        , basisPoints        )         {
   return Math.round((cents * basisPoints) / 10_000);
 }
 
-function nonNeg(n: number): number {
+function nonNeg(n        )         {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 }
 
@@ -170,15 +172,15 @@ function nonNeg(n: number): number {
  * الأطفال دون السادسة خارج الحساب تماماً: لا سرير ولا تذكرة ولا خدمة فردية.
  * ومن هم في السادسة فأكثر لهم سرير إضافي وتُحتسب عليهم التذاكر والخدمات.
  */
-export function quote(input: QuoteInput): QuoteResult {
+export function quote(input            )              {
   const adults = Math.max(1, nonNeg(input.adults));
   const childrenBed = nonNeg(input.childrenBed);
   const plan = planRooms(adults, childrenBed);
   const payingPax = plan.payingPax;
   const seasonPct = SEASON_PCT[input.season] ?? 100;
 
-  const lines: QuoteLine[] = [];
-  const add = (key: string, label: string, detail: string, amount: number): number => {
+  const lines              = [];
+  const add = (key        , label        , detail        , amount        )         => {
     if (amount > 0) lines.push({ key, label, detail, amount });
     return amount;
   };
@@ -262,25 +264,25 @@ export function quote(input: QuoteInput): QuoteResult {
   };
 }
 
-export interface TierRates {
-  /** سعر الغرفة لليلة لهذه الفئة، بالسنت. */
-  hotelRate: number;
-  /** فرق السرير الثالث لهذه الفئة، بالسنت. */
-  tripleExtra: number;
-  /** سعر السيارة لليوم لهذه الفئة، بالسنت. */
-  carRate: number;
-  /** هل تشمل الفئة مرشداً طوال البرنامج. */
-  guideIncluded: boolean;
-  /** هامش يتجاوز هامش الفئة الافتراضي. */
-  marginPct?: number;
-  hotelName?: string;
-}
+                            
+                                             
+                    
+                                              
+                      
+                                              
+                  
+                                            
+                         
+                                          
+                     
+                     
+ 
 
-export interface TierOffer extends QuoteResult {
-  tier: Tier;
-  label: string;
-  hotelName?: string;
-}
+                                                
+             
+                
+                     
+ 
 
 /**
  * يبني ثلاثة عروض من برنامج واحد بتبديل الفندق والسيارة والهامش فقط.
@@ -289,8 +291,8 @@ export interface TierOffer extends QuoteResult {
  * الهامش الثابت (marginFixed) ينتقل من base إلى الفئات الثلاث بنفس الرقم
  * ويتقدّم على نسبة الفئة — «رقم ثابت» يعني رقماً واحداً لا ثلاثة.
  */
-export function threeTiers(base: QuoteInput, rates: Record<Tier, TierRates>): TierOffer[] {
-  return (Object.keys(TIER_MARGIN_PCT) as Tier[]).map((tier) => {
+export function threeTiers(base            , rates                         )              {
+  return (Object.keys(TIER_MARGIN_PCT)          ).map((tier) => {
     const r = rates[tier];
     const result = quote({
       ...base,
@@ -305,15 +307,15 @@ export function threeTiers(base: QuoteInput, rates: Record<Tier, TierRates>): Ti
 }
 
 /** يحوّل سنتات إلى نص بالدولار مثل `$1,240`. للعرض فقط، لا يُستخدم في الحساب. */
-export function money(cents: number, currency = 'USD'): string {
-  const symbols: Record<string, string> = { USD: '$', EUR: '€', SAR: 'ر.س ', TRY: '₺' };
+export function money(cents        , currency = 'USD')         {
+  const symbols                         = { USD: '$', EUR: '€', SAR: 'ر.س ', TRY: '₺' };
   const sym = symbols[currency] ?? '';
   const whole = Math.round(cents / 100);
   return sym + whole.toLocaleString('en-US');
 }
 
 /** يحوّل مبلغاً مكتوباً بالدولار (مثل "85" أو "85.5") إلى سنتات صحيحة. */
-export function toCents(amount: string | number): number {
+export function toCents(amount                 )         {
   const n = typeof amount === 'number' ? amount : parseFloat(String(amount).replace(/[^\d.-]/g, ''));
   return Number.isFinite(n) ? Math.round(n * 100) : 0;
 }

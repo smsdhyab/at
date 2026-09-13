@@ -223,3 +223,26 @@ test('برنامجا إسطنبول الحقيقيان يطابقان التكل
   // شخصان وطفلان: غرفتان مزدوجتان بلا سرير إضافي — 6×120 + 2×50 + 3×100
   assert.equal(quote({ ...base, adults: 2, childrenFree: 0, childrenBed: 2 }).cost, 112_000);
 });
+
+test('الهامش الثابت يحلّ محل النسبة ويُطبَّق مرة واحدة على الحجز كله', () => {
+  const r = quote({ ...trabzon, marginFixed: 30_000 });
+  assert.equal(r.cost, 208_600, 'التكلفة لا تتأثر بنوع الهامش');
+  assert.equal(r.markup, 30_000, 'الهامش هو الرقم الثابت نفسه لا نسبة منه');
+  // الرسوم تُحسب بعد الهامش على المجموع، كما في حالة النسبة: 238600 × 2.5٪
+  assert.equal(r.fees, 5_965);
+  assert.equal(r.sell, 245_000, 'ثم يُقرَّب لأعلى إلى أقرب 1000');
+
+  // صفر أو سالب = لا هامش ثابت → تعود النسبة
+  assert.equal(quote({ ...trabzon, marginFixed: 0 }).markup, 45_892);
+  assert.equal(quote({ ...trabzon, marginFixed: -5 }).markup, 45_892);
+
+  // الفئات الثلاث تحمل نفس الرقم مهما اختلفت هوامش النسبة الافتراضية
+  const rates: Record<Tier, TierRates> = {
+    economy: { hotelRate: 5_000, tripleExtra: 1_800, carRate: 7_000, guideIncluded: false },
+    premium: { hotelRate: 8_500, tripleExtra: 3_000, carRate: 9_500, guideIncluded: false },
+    vip: { hotelRate: 14_500, tripleExtra: 5_100, carRate: 15_000, guideIncluded: true },
+  };
+  for (const o of threeTiers({ ...trabzon, marginFixed: 30_000 }, rates)) {
+    assert.equal(o.markup, 30_000, `${o.tier}: الهامش الثابت لم يصل`);
+  }
+});

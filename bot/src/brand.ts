@@ -10,7 +10,7 @@ export const brand = {
   legalName: process.env.BRAND_LEGAL_NAME ?? '',
   tagline: process.env.BRAND_TAGLINE ?? 'بضيافة عربية — أمان المسافر مسؤوليتنا وسمعتنا',
   website: process.env.BRAND_SITE ?? 'alarabtravelers.com',
-  whatsapp: process.env.WHATSAPP_NUMBER ?? '905013196750',
+  whatsapp: process.env.WHATSAPP_NUMBER ?? '966534436932',
   email: process.env.BRAND_EMAIL ?? '',
   address: process.env.BRAND_ADDRESS ?? '',
   /** رقم رخصة الوكالة (TÜRSAB مثلاً). يُترك فارغاً حتى يُعطى. */
@@ -70,11 +70,25 @@ export const fonts = {
   body: '"Thmanyah Sans", "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif',
 } as const;
 
-/** رقم الواتساب بصيغة عرض: ‎+90 501 319 6750‎ */
-export function whatsappDisplay(): string {
-  const d = brand.whatsapp.replace(/\D/g, '');
+/**
+ * رقم الواتساب بصيغة عرض. رمز الدولة يحدد التقسيم:
+ * السعودية ‎+966 53 443 6932‎ · تركيا ‎+90 501 319 6750‎ · غيرهما بلا تقسيم.
+ */
+export function whatsappDisplay(number = brand.whatsapp): string {
+  const d = number.replace(/\D/g, '');
   if (d.length < 10) return d;
-  return `+${d.slice(0, 2)} ${d.slice(2, 5)} ${d.slice(5, 8)} ${d.slice(8)}`;
+  // [رمز الدولة، أطوال المجموعات بعده]
+  const groups: ReadonlyArray<readonly [string, readonly number[]]> = [
+    ['966', [2, 3, 4]],
+    ['90', [3, 3, 4]],
+  ];
+  for (const [cc, lens] of groups) {
+    if (!d.startsWith(cc)) continue;
+    let i = cc.length;
+    const parts = lens.map((n) => d.slice(i, (i += n)));
+    return `+${cc} ${parts.join(' ')}${d.slice(i) ? ' ' + d.slice(i) : ''}`;
+  }
+  return `+${d}`;
 }
 
 /** الحقول الناقصة التي تُضعف المستند أمام الزبون. */

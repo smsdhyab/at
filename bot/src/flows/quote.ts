@@ -250,14 +250,23 @@ export async function handleQuoteStep(ctx: Context, s: Session, text: string): P
     }
 
     case 'q.margin': {
-      const n = parseInt(text.replace(/\D/g, ''), 10);
-      if (!Number.isFinite(n) || n < 0 || n > 80) {
-        await ctx.reply('اكتب نسبة بين 0 و80.');
+      // «22» أو «22%» نسبة · «$300» أو «300$» رقم ثابت على الحجز كله · «0» يعيد الافتراضي
+      const raw = text.trim();
+      const isFixed = raw.includes('$');
+      const n = parseInt(raw.replace(/\D/g, ''), 10);
+      if (!Number.isFinite(n) || n < 0 || (!isFixed && n > 80)) {
+        await ctx.reply(
+          'اكتب نسبة مثل <code>22</code> أو رقماً ثابتاً مثل <code>$300</code>.',
+          { parse_mode: 'HTML' },
+        );
         return true;
       }
-      s.draft.marginPct = n > 0 ? n : undefined;
+      s.draft.marginPct = !isFixed && n > 0 ? n : undefined;
+      s.draft.marginFixed = isFixed && n > 0 ? n * 100 : undefined;
       await clearStep(s);
-      await ctx.reply(n ? `✅ هامش موحّد ${n}٪` : '✅ عاد لهوامش الفئات');
+      await ctx.reply(
+        n === 0 ? '✅ عاد لهوامش الفئات' : isFixed ? `✅ هامش ثابت ${fmt(n * 100)}` : `✅ هامش موحّد ${n}٪`,
+      );
       await showResult(ctx, s);
       return true;
     }
@@ -350,6 +359,7 @@ async function buildOffers(s: Session): Promise<Built | null> {
     dinnerPerPerson: d.dinnerPerPerson ?? 0,
     miscTotal: d.miscTotal ?? 0,
     marginPct: d.marginPct ?? 22,
+    marginFixed: d.marginFixed,
     feesBp: FEES_BP,
     depositPct: DEPOSIT_PCT,
     roundTo: ROUND_TO,
@@ -542,7 +552,9 @@ async function editMenu(ctx: Context, s: Session, edit = false): Promise<void> {
     `🧭 مرشد: ${d.guideDays ?? 0} يوم`,
     `🚕 نقلات المطار: ${d.transfers ?? 2}`,
     `➕ خدمات: ${fmt(d.simPerPerson ?? 0)} شريحة · ${fmt(d.dinnerPerPerson ?? 0)} عشاء · ${fmt(d.miscTotal ?? 0)} متفرقات`,
-    `💰 الهامش: ${d.marginPct ? `${d.marginPct}٪ موحّد` : 'حسب الفئة (18 · 22 · 28)'}`,
+    `💰 الهامش: ${
+      d.marginFixed ? `${fmt(d.marginFixed)} ثابت` : d.marginPct ? `${d.marginPct}٪ موحّد` : 'حسب الفئة (18 · 22 · 28)'
+    }`,
   ];
   const text = rows.join('\n');
   if (edit) await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
@@ -627,7 +639,8 @@ export async function handleQuoteCallback(ctx: Context, parts: string[]): Promis
         case 'margin':
           await expectStep(s, 'q.margin');
           await ctx.reply(
-            'هامش موحّد لكل الفئات بالنسبة المئوية.\n' +
+            'هامش موحّد لكل الفئات:\n' +
+              'نسبة مثل <code>22</code> · أو رقم ثابت على الحجز كله مثل <code>$300</code>\n' +
               'اكتب <code>0</code> للعودة لهوامش الفئات (18 · 22 · 28).',
             { parse_mode: 'HTML' },
           );

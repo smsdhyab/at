@@ -12,7 +12,8 @@
     "start": "node --env-file-if-exists=.env src/bot.ts",
     "test": "node --env-file-if-exists=.env --test src/*.test.ts",
     "migrate": "node --env-file-if-exists=.env src/migrate.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "calc:build": "node src/build-calc.ts"
   },
   "dependencies": {
     "grammy": "^1.30.0",

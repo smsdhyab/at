@@ -38,6 +38,8 @@ export interface DraftData {
   miscTotal?: number;
   /** هامش موحّد يتجاوز هوامش الفئات الثلاث. */
   marginPct?: number;
+  /** هامش ثابت بالسنت على الحجز كله — يتقدّم على النسبة. */
+  marginFixed?: number;
   customerName?: string;
   customerPhone?: string;
   savedId?: number;

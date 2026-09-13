@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>حاسبة الأسعار — المسافرون العرب</title>
+<style>
+  /* الخطوط من bot/assets عبر npm run calc:build */
+  @font-face { font-family: "Thmanyah Display"; src: url(fonts/thmanyah-display-Bold.woff2) format("woff2"); font-weight: 700; font-display: swap; }
+  @font-face { font-family: "Thmanyah Sans"; src: url(fonts/thmanyah-sans-Regular.woff2) format("woff2"); font-weight: 400; font-display: swap; }
+  @font-face { font-family: "Thmanyah Sans"; src: url(fonts/thmanyah-sans-Medium.woff2) format("woff2"); font-weight: 500; font-display: swap; }
+  @font-face { font-family: "Thmanyah Sans"; src: url(fonts/thmanyah-sans-Bold.woff2) format("woff2"); font-weight: 700; font-display: swap; }
+
+  /* لوحة الهوية — نفس قيم bot/src/brand.ts */
+  :root {
+    --sea: #2E9DA8; --sea-deep: #1D7580; --sea-soft: #DFF1F3;
+    --sand: #D9834A; --sand-soft: #FBEDE1; --sun: #EFB94F;
+    --cream: #FDFAF6; --sky: #D3E9F0; --sky-low: #F0F8F6;
+    --ink: #2C464E; --ink2: #55707A; --muted: #8AA2A9;
+    --line: rgba(29,117,128,.20); --card: #fff;
+    --display: "Thmanyah Display", "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+    --body: "Thmanyah Sans", "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: light; }
+  body {
+    margin: 0; font-family: var(--body); color: var(--ink); font-size: 16px; line-height: 1.6;
+    background: linear-gradient(to bottom, var(--sky) 0, var(--sky-low) 320px, var(--cream) 100%) fixed;
+    min-height: 100vh;
+  }
+  /* لا letter-spacing على العربي: يكسر اتصال الحروف */
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 16px 60px; }
+  header { display: flex; align-items: end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  header h1 { font-family: var(--display); font-size: 30px; margin: 0; color: var(--sea-deep); line-height: 1.2; }
+  header p { margin: 4px 0 0; color: var(--ink2); font-size: 14px; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; background: #fff; border: 1px solid var(--line); color: var(--ink2); }
+  .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .pill.ok::before { background: var(--sea); }
+  .pill.err { color: #a33; border-color: #e5b5b5; }
+  .pill.err::before { background: #c44; }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+  fieldset.card { margin: 0 0 14px; min-width: 0; }
+  legend { font-family: var(--display); font-size: 17px; color: var(--sea-deep); padding: 0 6px; }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 12px; }
+  .row + .row { margin-top: 10px; }
+  label.f { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--ink2); min-width: 0; }
+  label.f > span b { color: var(--ink); font-weight: 500; }
+  input:not([type=checkbox]):not([type=radio]), select {
+    font: inherit; font-size: 16px; color: var(--ink); background: #fff;
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-height: 44px; width: 100%;
+  }
+  input:focus, select:focus { outline: 2px solid var(--sea); outline-offset: 1px; border-color: var(--sea); }
+  input[type=number] { font-variant-numeric: tabular-nums; }
+  .hint { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+  .hint.rooms { color: var(--sea-deep); font-weight: 500; }
+
+  .checks { display: flex; flex-direction: column; gap: 6px; }
+  .check { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--sky-low); }
+  .check input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--sea); margin: 0; }
+  .check .nm { font-size: 15px; }
+  .check .pr { font-variant-numeric: tabular-nums; color: var(--sand); font-weight: 700; white-space: nowrap; }
+  .check .qty { width: 64px; min-height: 36px; padding: 6px 8px; text-align: center; }
+  .check.svc { grid-template-columns: auto 1fr auto auto; }
+  .unit { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .seg label { padding: 9px 14px; cursor: pointer; font-weight: 500; color: var(--ink2); background: #fff; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg input:checked + label { background: var(--sea-deep); color: #fff; }
+  .margin-row { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; }
+
+  details.adv summary { cursor: pointer; color: var(--sea-deep); font-weight: 500; list-style: none; }
+  details.adv summary::before { content: "▸ "; }
+  details.adv[open] summary::before { content: "▾ "; }
+  details.adv .row { margin-top: 10px; }
+
+  /* النتائج */
+  .tiers { display: grid; grid-template-columns: 1fr; gap: 12px; position: sticky; top: 12px; }
+  .tier { padding: 16px 18px; border-top: 4px solid var(--sea); }
+  .tier.premium { border-top-color: var(--sand); }
+  .tier.vip { border-top-color: var(--sun); }
+  .tier .head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .tier h3 { margin: 0; font-family: var(--display); font-size: 19px; color: var(--sea-deep); }
+  .tier .stars { color: var(--sun); font-size: 13px; }
+  .tier .sell { font-family: var(--display); font-size: 36px; color: var(--sand); line-height: 1.1; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
+  .tier .sub { color: var(--ink2); font-size: 13.5px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .tier .sub b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .tier .hotel { margin-top: 6px; font-size: 14px; color: var(--ink2); }
+  .tier details { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 8px; }
+  .tier summary { cursor: pointer; color: var(--sea-deep); font-size: 14px; font-weight: 500; }
+  table.lines { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 14px; }
+  table.lines td { padding: 4px 0; vertical-align: top; }
+  table.lines td:last-child { text-align: left; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.lines .d { color: var(--muted); font-size: 12.5px; display: block; }
+  table.lines tr.total td { border-top: 1px solid var(--line); font-weight: 700; padding-top: 6px; }
+  table.lines tr.profit td { color: var(--sea-deep); font-weight: 700; }
+
+  .empty { color: var(--ink2); text-align: center; padding: 30px 10px; }
+  .error { background: #fff3f3; border: 1px solid #e5b5b5; color: #8a2b2b; padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; display: none; }
+  footer { margin-top: 30px; color: var(--muted); font-size: 12.5px; text-align: center; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>حاسبة الأسعار</h1>
+      <p>المسافرون العرب · أداة داخلية — الأسعار تُقرأ من القاعدة مباشرة، ونفس محرك البوت يحسب</p>
+    </div>
+    <span class="pill" id="status">يحمّل الأسعار…</span>
+  </header>
+
+  <div class="error" id="error"></div>
+
+  <div class="grid">
+    <form id="f" autocomplete="off" onsubmit="return false">
+      <fieldset class="card">
+        <legend>الرحلة</legend>
+        <div class="row">
+          <label class="f"><span><b>الوجهة</b></span><select name="dest" id="dest"></select></label>
+          <label class="f"><span><b>الموسم</b></span>
+            <select name="season">
+              <option value="auto">تلقائي من تاريخ المغادرة</option>
+              <option value="normal">عادي</option>
+              <option value="high">مرتفع (يونيو–سبتمبر)</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="f"><span><b>المغادرة</b></span><input type="date" name="depart"></label>
+          <label class="f"><span><b>العودة</b></span><input type="date" name="ret"></label>
+          <label class="f"><span><b>الليالي</b></span><input type="number" name="nights" min="1" max="60" value="6" inputmode="numeric"></label>
+        </div>
+        <p class="hint" id="seasonHint"></p>
+      </fieldset>
+
+      <fieldset class="card">
+        <legend>المسافرون</legend>
+        <div class="row">
+          <label class="f"><span><b>البالغون</b></span><input type="number" name="adults" min="1" max="20" value="2" inputmode="numeric"></label>
+          <label class="f"><span><b>أطفال دون 6</b> · مجاناً</span><input type="number" name="kidsFree" min="0" max="10" value="0" inputmode="numeric"></label>
+          <label class="f"><span><b>أطفال 6 فأكثر</b> · سرير</span><input type="number" name="kidsBed" min="0" max="10" value="0" inputmode="numeric"></label>
+        </div>
+        <p class="hint rooms" id="roomsHint"></p>
+      </fieldset>
+
+      <fieldset class="card">
+        <legend>الفنادق</legend>
+        <div class="row" id="hotelRow">
+          <label class="f"><span><b>اقتصادي</b></span><select name="h_economy"></select></label>
+          <label class="f"><span><b>مميز</b></span><select name="h_premium"></select></label>
+          <label class="f"><span><b>VIP</b></span><select name="h_vip"></select></label>
+        </div>
+        <p class="hint">الافتراضي: الأرخص في كل خانة (3 · 4 · 5 نجوم) — كما يختار البوت. السعر المعروض حسب الموسم.</p>
+      </fieldset>
+
+      <fieldset class="card">
+        <legend>المواصلات</legend>
+        <div class="row">
+          <label class="f"><span><b>أيام السيارة</b></span><input type="number" name="carDays" min="0" max="60" inputmode="numeric"></label>
+          <label class="f"><span><b>عدد النقلات</b></span><input type="number" name="transfers" min="0" max="6" value="2" inputmode="numeric"></label>
+          <label class="f"><span><b>سعر النقلة</b></span><select name="transferRate" id="transferRate"></select></label>
+        </div>
+        <p class="hint">السيارة: سيدان للاقتصادي · فان للمميز · فان VIP مع مرشد — أيامها الليالي ناقص واحد ما لم تغيّرها.</p>
+      </fieldset>
+
+      <fieldset class="card">
+        <legend>الجولات</legend>
+        <div class="checks" id="tours"></div>
+      </fieldset>
+
+      <fieldset class="card" id="servicesBox">
+        <legend>خدمات إضافية</legend>
+        <div class="checks" id="services"></div>
+      </fieldset>
+
+      <fieldset class="card">
+        <legend>إضافات</legend>
+        <div class="row">
+          <label class="f"><span><b>تذاكر الدخول</b> · للشخص</span><select name="tickets"><option value="1">تُضاف</option><option value="0">لا</option></select></label>
+          <label class="f"><span><b>أيام المرشد</b></span><input type="number" name="guideDays" min="0" max="60" value="0" inputmode="numeric"></label>
+          <label class="f"><span><b>شريحة</b> $ للشخص</span><input type="number" name="sim" min="0" value="0" inputmode="decimal"></label>
+          <label class="f"><span><b>عشاء</b> $ للشخص</span><input type="number" name="dinner" min="0" value="0" inputmode="decimal"></label>
+          <label class="f"><span><b>متفرقات</b> $ إجمالي</span><input type="number" name="misc" min="0" value="0" inputmode="decimal"></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="card">
+        <legend>هامش الربح</legend>
+        <div class="margin-row">
+          <div class="seg">
+            <input type="radio" name="mkind" id="mk_pct" value="pct" checked><label for="mk_pct">نسبة ٪</label>
+            <input type="radio" name="mkind" id="mk_fix" value="fixed"><label for="mk_fix">رقم ثابت $</label>
+          </div>
+          <input type="number" name="margin" min="0" placeholder="فارغ = حسب الفئة 18 · 22 · 28" inputmode="decimal">
+        </div>
+        <p class="hint" id="marginHint">النسبة تُطبَّق على التكلفة. الرقم الثابت يُضاف مرة واحدة على الحجز كله ويحلّ محل النسبة.</p>
+        <details class="adv">
+          <summary>متقدم</summary>
+          <div class="row">
+            <label class="f"><span><b>رسوم التحويل</b> ٪</span><input type="number" name="fees" min="0" step="0.1" value="2.5" inputmode="decimal"></label>
+            <label class="f"><span><b>العربون</b> ٪</span><input type="number" name="deposit" min="0" max="100" value="30" inputmode="numeric"></label>
+            <label class="f"><span><b>التقريب إلى</b> $</span><input type="number" name="roundTo" min="0" value="10" inputmode="numeric"></label>
+          </div>
+        </details>
+      </fieldset>
+    </form>
+
+    <section class="tiers" id="tiers">
+      <div class="card empty">النتائج تظهر هنا بعد تحميل الأسعار</div>
+    </section>
+  </div>
+
+  <footer>كل المبالغ بالدولار. الحساب بأعداد صحيحة بالسنت — نفس ملف pricing.ts في البوت.</footer>
+</div>
+
+<script type="module">
+import { threeTiers, planRooms, money, toCents, TIER_LABEL } from './pricing.js';
+
+// المفتاح العام (publishable) مصمَّم للنشر في المتصفح؛ RLS يسمح له بقراءة
+// جداول الأسعار الخمسة فقط، للصفوف الفعّالة فقط، ولا يكتب شيئاً.
+const SUPABASE_URL = 'https://lhjfapvqvbasobrtjtdi.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_fcmAehdlnIa_D6JB9iQqlw_uOpFksWN';
+
+const UNIT = { per_trip: 'لكل نقلة', per_night: 'لكل ليلة', per_person: 'للشخص', once: 'مرة واحدة' };
+const TIERS = ['economy', 'premium', 'vip'];
+const $ = (sel) => document.querySelector(sel);
+const form = $('#f');
+const status = $('#status');
+const errBox = $('#error');
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+async function table(name, query) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${name}?${query}`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+  });
+  if (!r.ok) throw new Error(`${name}: HTTP ${r.status}`);
+  return r.json();
+}
+
+let DB = null;
+async function load() {
+  const [destinations, hotels, cars, tours, services] = await Promise.all([
+    table('destinations', 'select=slug,name,transfer_rate,ticket_pp,guide_rate,sort_order&active=eq.true&order=sort_order.asc'),
+    table('hotels', 'select=id,destination,name,class,stars,rate_normal,rate_high,rate_triple&active=eq.true&order=rate_normal.asc,id.asc'),
+    table('cars', 'select=id,destination,kind,name,rate_day&active=eq.true&order=rate_day.asc,id.asc'),
+    table('tours', 'select=id,destination,name,price&active=eq.true&order=sort_order.asc,id.asc'),
+    table('services', 'select=id,destination,name,price,unit&active=eq.true&order=sort_order.asc,id.asc'),
+  ]);
+  const by = (rows) => (slug) => rows.filter((r) => r.destination === slug);
+  DB = { destinations, hotels: by(hotels), cars: by(cars), tours: by(tours), services: by(services) };
+}
+
+/* ------------------------------ الواجهة ------------------------------ */
+
+const v = (name) => form.elements[name].value;
+const num = (name, d = 0) => { const n = parseFloat(v(name)); return Number.isFinite(n) ? n : d; };
+const int = (name, d = 0) => Math.floor(num(name, d));
+
+function season() {
+  const s = v('season');
+  if (s !== 'auto') return s;
+  const m = Number((v('depart') || '').split('-')[1]);
+  return m >= 6 && m <= 9 ? 'high' : 'normal';
+}
+
+function fillDestinations() {
+  $('#dest').innerHTML = DB.destinations.map((d) => `<option value="${esc(d.slug)}">${esc(d.name)}</option>`).join('');
+}
+
+/** النجوم للعرض: رقم → ★، وغير ذلك (كوخ) بالاسم. */
+const starsOf = (h) => (Number(h?.stars) ? '★'.repeat(Number(h.stars)) : h?.stars === 'cabin' ? 'كوخ' : '');
+const starsShort = (h) => (Number(h?.stars) ? `${h.stars}★` : h?.stars === 'cabin' ? 'كوخ' : '');
+
+/** الأرخص في الخانة — نفس hotelsByClass في البوت. */
+function autoHotel(hotels, cls) { return hotels.find((h) => h.class === cls); }
+
+function fillDestinationDependent() {
+  const slug = v('dest');
+  const hotels = DB.hotels(slug);
+  const high = season() === 'high';
+  const auto = {
+    economy: autoHotel(hotels, '3'),
+    premium: autoHotel(hotels, '4'),
+    vip: autoHotel(hotels, '5') ?? autoHotel(hotels, 'cabin'),
+  };
+  for (const t of TIERS) {
+    const sel = form.elements[`h_${t}`];
+    const chosen = (auto[t] ?? hotels[0])?.id;
+    sel.innerHTML = hotels.map((h) =>
+      `<option value="${h.id}" ${h.id === chosen ? 'selected' : ''}>${esc(h.name)} — ${money(high ? h.rate_high : h.rate_normal)} · ${starsShort(h)}</option>`,
+    ).join('') || '<option value="">— لا فنادق —</option>';
+  }
+
+  const dest = DB.destinations.find((d) => d.slug === slug);
+  const perTrip = DB.services(slug).filter((s) => s.unit === 'per_trip');
+  $('#transferRate').innerHTML =
+    `<option value="${dest.transfer_rate}">نقلة المطار الافتراضية — ${money(dest.transfer_rate)}</option>` +
+    perTrip.map((s) => `<option value="${s.price}">${esc(s.name)} — ${money(s.price)}</option>`).join('');
+
+  $('#tours').innerHTML = DB.tours(slug).map((t) =>
+    `<label class="check"><input type="checkbox" name="tour" value="${t.id}"><span class="nm">${esc(t.name)}</span><span class="pr">${money(t.price)}</span></label>`,
+  ).join('') || '<p class="hint">لا جولات مسجّلة لهذه الوجهة.</p>';
+
+  const svcs = DB.services(slug);
+  $('#servicesBox').hidden = svcs.length === 0;
+  $('#services').innerHTML = svcs.map((s) =>
+    `<label class="check svc"><input type="checkbox" name="svc" value="${s.id}"><span class="nm">${esc(s.name)}<span class="unit"> · ${UNIT[s.unit] ?? s.unit}</span></span>` +
+    `<span class="pr">${money(s.price)}</span><input type="number" class="qty" name="svcqty_${s.id}" min="1" value="1" inputmode="numeric" title="الكمية"></label>`,
+  ).join('');
+
+  form.elements.tickets.value = dest.ticket_pp > 0 ? '1' : '0';
+}
+
+function syncNights() {
+  const a = Date.parse(v('depart')), b = Date.parse(v('ret'));
+  if (Number.isFinite(a) && Number.isFinite(b)) {
+    const n = Math.round((b - a) / 86_400_000);
+    if (n >= 1 && n <= 60) form.elements.nights.value = n;
+  }
+  const s = season();
+  $('#seasonHint').textContent = s === 'high' ? 'موسم مرتفع — يُستعمل سعر الفندق المرتفع' : 'موسم عادي — يُستعمل سعر الفندق العادي';
+}
+
+/* ------------------------------ الحساب ------------------------------ */
+
+function compute() {
+  const slug = v('dest');
+  const dest = DB.destinations.find((d) => d.slug === slug);
+  const hotels = DB.hotels(slug);
+  const cars = DB.cars(slug);
+  const high = season() === 'high';
+
+  const nights = Math.min(60, Math.max(1, int('nights', 1)));
+  const adults = Math.max(1, int('adults', 1));
+  const kidsFree = Math.max(0, int('kidsFree'));
+  const kidsBed = Math.max(0, int('kidsBed'));
+  const plan = planRooms(adults, kidsBed);
+  $('#roomsHint').textContent =
+    `${plan.rooms} غرفة${plan.triples ? ` — منها ${plan.triples} بسرير إضافي` : ''} · ${plan.payingPax} محسوبون` +
+    (kidsFree ? ` · ${kidsFree} مجاناً` : '');
+
+  if (form.elements.carDays.value === '') form.elements.carDays.value = Math.max(0, nights - 1);
+  const carDays = Math.max(0, int('carDays'));
+
+  const hotelFor = (t) => hotels.find((h) => h.id === Number(v(`h_${t}`))) ?? hotels[0];
+  const carFor = (kind) => cars.find((c) => c.kind === kind);
+  const rateOf = (h) => (h ? (high ? h.rate_high : h.rate_normal) : 0);
+
+  const tourIds = new Set([...form.querySelectorAll('input[name=tour]:checked')].map((i) => Number(i.value)));
+  const tours = DB.tours(slug).filter((t) => tourIds.has(t.id)).map((t) => ({ name: t.name, price: t.price }));
+
+  // الخدمات الإضافية: الوحدة تحدد الضرب، والمجموع يدخل بند المتفرقات
+  let svcTotal = 0;
+  const svcLines = [];
+  for (const i of form.querySelectorAll('input[name=svc]:checked')) {
+    const s = DB.services(slug).find((x) => x.id === Number(i.value));
+    if (!s) continue;
+    const qty = Math.max(1, int(`svcqty_${s.id}`, 1));
+    const mult = s.unit === 'per_night' ? nights : s.unit === 'per_person' ? plan.payingPax : qty;
+    svcTotal += s.price * mult;
+    svcLines.push(`${s.name} × ${mult}`);
+  }
+
+  const mkind = form.elements.mkind.value;
+  const marginRaw = num('margin', NaN);
+  const hasMargin = Number.isFinite(marginRaw) && marginRaw > 0;
+  const marginPct = mkind === 'pct' && hasMargin ? marginRaw : undefined;
+  const marginFixed = mkind === 'fixed' && hasMargin ? toCents(marginRaw) : undefined;
+
+  const base = {
+    nights, adults, childrenFree: kidsFree, childrenBed: kidsBed,
+    // الموسم مطبّق في سعر الفندق المختار — لا يُطبّق مرتين (نفس البوت)
+    season: 'normal',
+    hotelRate: rateOf(hotelFor('premium')), tripleExtra: hotelFor('premium')?.rate_triple ?? 0, hotelNights: nights,
+    carRate: carFor('van')?.rate_day ?? 0, carDays,
+    transfers: Math.max(0, int('transfers')), transferRate: Number(v('transferRate')) || 0,
+    tours,
+    ticketPerPerson: v('tickets') === '1' ? dest.ticket_pp : 0,
+    guideDays: Math.max(0, int('guideDays')), guideRate: dest.guide_rate,
+    simPerPerson: toCents(num('sim')), dinnerPerPerson: toCents(num('dinner')),
+    miscTotal: toCents(num('misc')) + svcTotal,
+    marginPct: marginPct ?? 22, marginFixed,
+    feesBp: Math.round(Math.max(0, num('fees')) * 100),
+    depositPct: Math.max(0, Math.min(100, int('deposit', 30))),
+    roundTo: Math.max(0, toCents(num('roundTo'))),
+  };
+  const rates = {
+    economy: { hotelRate: rateOf(hotelFor('economy')), tripleExtra: hotelFor('economy')?.rate_triple ?? 0, carRate: carFor('sedan')?.rate_day ?? 0, guideIncluded: false, hotelName: hotelFor('economy')?.name, marginPct },
+    premium: { hotelRate: rateOf(hotelFor('premium')), tripleExtra: hotelFor('premium')?.rate_triple ?? 0, carRate: carFor('van')?.rate_day ?? 0, guideIncluded: false, hotelName: hotelFor('premium')?.name, marginPct },
+    vip: { hotelRate: rateOf(hotelFor('vip')), tripleExtra: hotelFor('vip')?.rate_triple ?? 0, carRate: carFor('vip')?.rate_day ?? 0, guideIncluded: true, hotelName: hotelFor('vip')?.name, marginPct },
+  };
+
+  render(threeTiers(base, rates), { hotelFor, svcLines, adults });
+}
+
+function render(offers, { hotelFor, svcLines, adults }) {
+  $('#tiers').innerHTML = offers.map((o) => {
+    const h = hotelFor(o.tier);
+    const lines = o.lines.map((l) => {
+      const detail = l.key === 'extras' && svcLines.length ? `${l.detail} · ${svcLines.join(' · ')}` : l.detail;
+      return `<tr><td>${esc(l.label)}<span class="d">${esc(detail)}</span></td><td>${money(l.amount)}</td></tr>`;
+    }).join('');
+    return `<article class="card tier ${o.tier}">
+      <div class="head"><h3>${esc(o.label)}</h3><span class="stars">${starsOf(h)}</span></div>
+      <div class="sell">${money(o.sell)}</div>
+      <div class="sub"><span>للبالغ <b>${money(o.perAdult)}</b></span><span>العربون <b>${money(o.deposit)}</b></span><span>الربح <b>${money(o.profit)}</b></span></div>
+      <div class="hotel">${esc(h?.name ?? '—')}</div>
+      <details><summary>التفصيل</summary>
+        <table class="lines">${lines}
+          <tr class="total"><td>التكلفة</td><td>${money(o.cost)}</td></tr>
+          <tr><td>الهامش</td><td>${money(o.markup)}</td></tr>
+          <tr><td>رسوم التحويل</td><td>${money(o.fees)}</td></tr>
+          <tr><td>التقريب</td><td>${money(o.rounding)}</td></tr>
+          <tr class="total"><td>سعر البيع</td><td>${money(o.sell)}</td></tr>
+          <tr class="profit"><td>الربح الصافي</td><td>${money(o.profit)}</td></tr>
+        </table>
+      </details>
+    </article>`;
+  }).join('');
+}
+
+/* ------------------------------ الربط ------------------------------ */
+
+form.addEventListener('input', (e) => {
+  const n = e.target.name;
+  if (n === 'dest') { fillDestinationDependent(); form.elements.carDays.value = ''; }
+  if (n === 'depart' || n === 'ret' || n === 'season') { syncNights(); fillDestinationDependent(); }
+  if (n === 'nights') form.elements.carDays.value = '';
+  compute();
+});
+form.addEventListener('change', (e) => { if (e.target.name === 'dest' || e.target.name === 'season') { fillDestinationDependent(); compute(); } });
+
+try {
+  await load();
+  fillDestinations();
+  syncNights();
+  fillDestinationDependent();
+  compute();
+  status.textContent = `الأسعار محمّلة · ${DB.destinations.length} وجهات`;
+  status.className = 'pill ok';
+} catch (err) {
+  status.textContent = 'تعذّر تحميل الأسعار';
+  status.className = 'pill err';
+  errBox.style.display = 'block';
+  errBox.textContent = `لم تصل الأسعار من القاعدة: ${err.message}. تأكد من الاتصال ثم أعد تحميل الصفحة.`;
+}
+</script>
+</body>
+</html>
