@@ -102,13 +102,16 @@ export function toOfferDoc(i: OfferDocInput): OfferDoc {
   };
 }
 
-/** بطاقة الصورة من نفس المستند — أرخص سعر وأبرز الجولات. */
+/**
+ * بطاقة الصورة من نفس المستند — أرخص سعر **للبالغ** وأبرز الجولات.
+ * البطاقات تُنشر على الموقع، وقرار المالك أن سعر الموقع للشخص لا للمجموعة.
+ */
 export function toCardDoc(doc: OfferDoc): CardDoc {
   return {
     destinationName: doc.destinationName,
     days: doc.days,
     nights: doc.nights,
-    fromPrice: Math.min(...doc.tiers.map((t) => t.price)),
+    fromPrice: Math.min(...doc.tiers.map((t) => t.perAdult)),
     currency: doc.currency,
     highlights: doc.tours.length ? doc.tours : doc.includes,
     heroImage: doc.heroImage,

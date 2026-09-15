@@ -20,7 +20,7 @@ export interface CardDoc {
   destinationName: string;
   days: number;
   nights: number;
-  /** أرخص سعر معروض، بالسنت. */
+  /** أرخص سعر للبالغ، بالسنت. */
   fromPrice: number;
   currency: string;
   highlights: string[];
@@ -180,6 +180,7 @@ ${doc.heroImage ? `<img class="bg" src="${esc(sized(doc.heroImage, IMG.card))}" 
     <div class="price">
       <span>تبدأ من</span>
       <strong>${esc(m)}</strong>
+      <span>للشخص</span>
     </div>
   </div>
 

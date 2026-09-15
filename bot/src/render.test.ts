@@ -120,9 +120,10 @@ test('الصور تصل إلى المستند والبطاقة', () => {
   assert.ok(bare.includes('ثلاثة خيارات'), 'المستند انكسر بلا صور');
 });
 
-test('بطاقة الصورة تأخذ أرخص سعر ومقاسها صحيح', () => {
+test('بطاقة الصورة تأخذ أرخص سعر للبالغ ومقاسها صحيح', () => {
   const card = toCardDoc(doc);
-  assert.equal(card.fromPrice, Math.min(...offers.map((o) => o.sell)));
+  assert.equal(card.fromPrice, Math.min(...offers.map((o) => o.perAdult)));
+  assert.ok(cardHtml(card, 'square').includes('للشخص'), 'البطاقة تُنشر على الموقع وسعرها للشخص');
   const square = cardHtml(card, 'square');
   assert.ok(square.includes('1080px'));
   assert.ok(square.includes(money(card.fromPrice, 'USD')));
