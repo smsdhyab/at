@@ -77,6 +77,12 @@ export interface QuoteInput {
    * الرسوم تُحسب بعده على (التكلفة + الهامش) في الحالتين.
    */
   marginFixed?: number;
+  /**
+   * سياسة الشركة: ربح ثابت لكل يوم من أيام البرنامج (الليالي + 1)، بالسنت.
+   * تحلّ محل النسبة، ويتقدّم عليها الهامش الثابت للحجز إن أُعطي.
+   * لا تظهر في أي مخرج للزبون — قيمة داخلية فقط.
+   */
+  marginPerDay?: number;
   /** رسوم التحويل بأجزاء العشرة آلاف: 250 = 2.5٪. */
   feesBp: number;
   /** نسبة العربون، نسبة مئوية صحيحة. */
@@ -239,8 +245,11 @@ export function quote(input: QuoteInput): QuoteResult {
 
   const cost = hotel + car + transfer + tours + tickets + guide + extras;
 
+  // الأولوية: ثابت للحجز ← سياسة اليوم ← نسبة الفئة
   const fixed = nonNeg(input.marginFixed ?? 0);
-  const markup = fixed > 0 ? fixed : pct(cost, Math.max(0, input.marginPct));
+  const perDay = nonNeg(input.marginPerDay ?? 0);
+  const days = nonNeg(input.nights) + 1;
+  const markup = fixed > 0 ? fixed : perDay > 0 ? perDay * days : pct(cost, Math.max(0, input.marginPct));
   const fees = bp(cost + markup, Math.max(0, input.feesBp));
   const beforeRounding = cost + markup + fees;
 

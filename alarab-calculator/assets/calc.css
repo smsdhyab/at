@@ -1,0 +1,170 @@
+/* حاسبة أسعار المسافرون العرب — مصدر واحد للصفحة العامة (docs/) ولإضافة ووردبرس.
+   كل المحددات تحت .alarab-calc كي لا تتسرب إلى قالب الموقع ولا يتسرب هو إليها.
+   لا letter-spacing على العربي: يكسر اتصال الحروف. */
+
+@font-face { font-family: "Thmanyah Display"; src: url(fonts/thmanyah-display-Bold.woff2) format("woff2"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Thmanyah Sans"; src: url(fonts/thmanyah-sans-Regular.woff2) format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Thmanyah Sans"; src: url(fonts/thmanyah-sans-Medium.woff2) format("woff2"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "Thmanyah Sans"; src: url(fonts/thmanyah-sans-Bold.woff2) format("woff2"); font-weight: 700; font-display: swap; }
+
+.alarab-calc {
+  /* لوحة الهوية — نفس قيم bot/src/brand.ts */
+  --sea: #2E9DA8; --sea-deep: #1D7580; --sea-soft: #DFF1F3;
+  --sand: #D9834A; --sand-soft: #FBEDE1; --sun: #EFB94F;
+  --cream: #FDFAF6; --sky: #D3E9F0; --sky-low: #F0F8F6;
+  --ink: #2C464E; --ink2: #55707A; --muted: #8AA2A9;
+  --line: rgba(29,117,128,.20); --card: #fff;
+  --display: "Thmanyah Display", "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+  --body: "Thmanyah Sans", "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+
+  direction: rtl; text-align: right;
+  font-family: var(--body); color: var(--ink); font-size: 16px; line-height: 1.6;
+  background: linear-gradient(to bottom, var(--sky) 0, var(--sky-low) 320px, var(--cream) 100%);
+  border-radius: 16px; padding: 20px 16px 40px; max-width: 1180px; margin: 0 auto;
+}
+.alarab-calc *, .alarab-calc *::before, .alarab-calc *::after { box-sizing: border-box; }
+
+.alarab-calc .head { display: flex; align-items: end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.alarab-calc .head h1 { font-family: var(--display); font-size: 30px; margin: 0; color: var(--sea-deep); line-height: 1.2; }
+.alarab-calc .head p { margin: 4px 0 0; color: var(--ink2); font-size: 14px; }
+.alarab-calc .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; background: #fff; border: 1px solid var(--line); color: var(--ink2); }
+.alarab-calc .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.alarab-calc .pill.ok::before { background: var(--sea); }
+.alarab-calc .pill.err { color: #a33; border-color: #e5b5b5; }
+.alarab-calc .pill.err::before { background: #c44; }
+
+.alarab-calc .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+
+.alarab-calc .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+.alarab-calc fieldset.card { margin: 0 0 14px; min-width: 0; border: 1px solid var(--line); }
+.alarab-calc legend { font-family: var(--display); font-size: 17px; color: var(--sea-deep); padding: 0 6px; }
+.alarab-calc .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 12px; }
+.alarab-calc .row + .row { margin-top: 10px; }
+.alarab-calc label.f { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--ink2); min-width: 0; margin: 0; }
+.alarab-calc label.f > span b { color: var(--ink); font-weight: 500; }
+.alarab-calc input:not([type=checkbox]):not([type=radio]), .alarab-calc select {
+  font: inherit; font-size: 16px; color: var(--ink); background: #fff; margin: 0;
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-height: 44px; width: 100%; height: auto;
+}
+.alarab-calc input:focus, .alarab-calc select:focus { outline: 2px solid var(--sea); outline-offset: 1px; border-color: var(--sea); }
+.alarab-calc input[type=number] { font-variant-numeric: tabular-nums; }
+.alarab-calc .hint { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+.alarab-calc .hint.rooms { color: var(--sea-deep); font-weight: 500; }
+
+.alarab-calc .checks { display: flex; flex-direction: column; gap: 6px; }
+.alarab-calc .check { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--sky-low); margin: 0; font-weight: 400; }
+.alarab-calc .check input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--sea); margin: 0; }
+.alarab-calc .check .nm { font-size: 15px; }
+.alarab-calc .check .pr { font-variant-numeric: tabular-nums; color: var(--sand); font-weight: 700; white-space: nowrap; }
+.alarab-calc .check .qty { width: 64px; min-height: 36px; padding: 6px 8px; text-align: center; }
+.alarab-calc .check.svc { grid-template-columns: auto 1fr auto auto; }
+.alarab-calc .unit { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+.alarab-calc .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.alarab-calc .seg label { padding: 9px 14px; cursor: pointer; font-weight: 500; color: var(--ink2); background: #fff; margin: 0; }
+.alarab-calc .seg input { position: absolute; opacity: 0; pointer-events: none; }
+.alarab-calc .seg input:checked + label { background: var(--sea-deep); color: #fff; }
+.alarab-calc .margin-row { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; }
+
+.alarab-calc details.adv summary { cursor: pointer; color: var(--sea-deep); font-weight: 500; list-style: none; }
+.alarab-calc details.adv summary::before { content: "▸ "; }
+.alarab-calc details.adv[open] summary::before { content: "▾ "; }
+.alarab-calc details.adv .row { margin-top: 10px; }
+
+.alarab-calc .btn { font: inherit; font-weight: 700; font-size: 15px; color: #fff; background: var(--sea-deep); border: 0; border-radius: 10px; padding: 10px 16px; min-height: 44px; cursor: pointer; line-height: 1.3; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.alarab-calc .btn:hover { background: var(--sea); color: #fff; }
+.alarab-calc .btn:disabled { background: var(--muted); cursor: not-allowed; }
+.alarab-calc .btn.ghost { background: #fff; color: var(--sea-deep); border: 1px solid var(--line); }
+.alarab-calc .btn.wa { background: #25D366; width: 100%; margin-top: 10px; }
+.alarab-calc .btn.wa:hover { background: #1fb457; }
+.alarab-calc .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.alarab-calc .bar { margin-top: 4px; }
+.alarab-calc .bar .btn { width: 100%; font-size: 17px; min-height: 52px; }
+
+/* النتائج */
+.alarab-calc .tiers { display: grid; grid-template-columns: 1fr; gap: 12px; position: sticky; top: 12px; }
+.alarab-calc #tiers { display: grid; gap: 12px; }
+.alarab-calc .rhead { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.alarab-calc .rhead h2 { font-family: var(--display); font-size: 20px; color: var(--sea-deep); margin: 0; }
+.alarab-calc .rhead .rsum { font-size: 13px; color: var(--ink2); }
+.alarab-calc .tier { padding: 16px 18px; border-top: 4px solid var(--sea); }
+.alarab-calc .tier.premium { border-top-color: var(--sand); }
+.alarab-calc .tier.vip { border-top-color: var(--sun); }
+.alarab-calc .tier .thead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.alarab-calc .tier h3 { margin: 0; font-family: var(--display); font-size: 19px; color: var(--sea-deep); }
+.alarab-calc .tier .stars { color: var(--sun); font-size: 13px; }
+.alarab-calc .tier .sell { font-family: var(--display); font-size: 36px; color: var(--sand); line-height: 1.1; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
+.alarab-calc .tier .sell small { font-family: var(--body); font-size: 13px; color: var(--ink2); font-weight: 500; margin-inline-start: 6px; }
+.alarab-calc .tier .sub { color: var(--ink2); font-size: 13.5px; display: flex; gap: 14px; flex-wrap: wrap; }
+.alarab-calc .tier .sub b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.alarab-calc .tier .hotel { margin-top: 6px; font-size: 14px; color: var(--ink2); }
+.alarab-calc .tier details { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.alarab-calc .tier summary { cursor: pointer; color: var(--sea-deep); font-size: 14px; font-weight: 500; }
+.alarab-calc table.lines { width: 100%; border-collapse: collapse; margin: 6px 0 0; font-size: 14px; }
+.alarab-calc table.lines td { padding: 4px 0; vertical-align: top; border: 0; }
+.alarab-calc table.lines td:last-child { text-align: left; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.alarab-calc table.lines .d { color: var(--muted); font-size: 12.5px; display: block; }
+.alarab-calc table.lines tr.total td { border-top: 1px solid var(--line); font-weight: 700; padding-top: 6px; }
+.alarab-calc table.lines tr.profit td { color: var(--sea-deep); font-weight: 700; }
+.alarab-calc .inc { margin: 8px 0 0; padding: 0 18px 0 0; font-size: 13.5px; color: var(--ink2); line-height: 1.6; }
+.alarab-calc .inc li { margin: 2px 0; }
+
+.alarab-calc .empty { color: var(--ink2); text-align: center; padding: 30px 10px; }
+.alarab-calc .error { background: #fff3f3; border: 1px solid #e5b5b5; color: #8a2b2b; padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; display: none; }
+.alarab-calc .foot { margin-top: 30px; color: var(--muted); font-size: 12.5px; text-align: center; }
+.alarab-calc [hidden] { display: none !important; }
+.alarab-calc .print-only { display: none; }
+.alarab-calc #edit { display: none; }
+.alarab-calc .public-only { display: none; }
+.alarab-calc[data-mode="public"] .public-only { display: block; }
+.alarab-calc[data-mode="public"] .head p.public-only { display: block; }
+
+/* الوضع العام (زوار الموقع): لا تكلفة ولا هامش ولا أرقام مورّدين — أسعار البيع فقط */
+.alarab-calc[data-mode="public"] .staff-only, .alarab-calc[data-mode="public"] .int, .alarab-calc[data-mode="public"] .pr { display: none !important; }
+.alarab-calc[data-mode="public"] .inc { display: block; }
+.alarab-calc[data-mode="public"] .check { grid-template-columns: auto 1fr; }
+.alarab-calc[data-mode="public"] .check.svc { grid-template-columns: auto 1fr auto; }
+
+/* الهاتف: زر الحساب مثبّت أسفل الشاشة؛ وبعد الحساب تحلّ النتائج محل النموذج */
+@media (max-width: 860px) {
+  .alarab-calc { padding-bottom: 84px; border-radius: 0; }
+  .alarab-calc .grid { grid-template-columns: 1fr; }
+  .alarab-calc .bar { position: fixed; inset-inline: 0; bottom: 0; z-index: 50; margin: 0;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: rgba(253,250,246,.94); backdrop-filter: blur(8px); border-top: 1px solid var(--line); }
+  .alarab-calc.results-mode { padding-bottom: 40px; }
+  .alarab-calc.results-mode .ac-form, .alarab-calc.results-mode .bar, .alarab-calc #placeholder { display: none; }
+  .alarab-calc #edit { display: inline-flex; }
+  .alarab-calc .tiers { position: static; }
+  .alarab-calc .check.svc { grid-template-columns: auto 1fr auto; }
+  .alarab-calc .check.svc .qty { grid-column: 2 / -1; justify-self: start; }
+  .alarab-calc .head h1 { font-size: 26px; }
+}
+
+/* الطباعة = نسخة الزبون: أسعار البيع وما يشمله العرض فقط.
+   كل ما يحمل التكلفة أو الهامش أو الربح موسوم .int ولا يُطبع أبداً.
+   وعلى موقع ووردبرس يُخفى كل ما حول الحاسبة (رأس القالب وتذييله). */
+@media print {
+  @page { size: A4; margin: 12mm; }
+  body * { visibility: hidden; }
+  .alarab-calc, .alarab-calc * { visibility: visible; }
+  .alarab-calc { position: absolute; inset: 0; width: 100%; max-width: none; padding: 0; margin: 0; background: #fff !important; border-radius: 0; font-size: 12px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .alarab-calc .head, .alarab-calc .ac-form, .alarab-calc .foot, .alarab-calc .int, .alarab-calc .error,
+  .alarab-calc .rhead, .alarab-calc .bar, .alarab-calc #placeholder, .alarab-calc .btn.wa { display: none !important; }
+  .alarab-calc .print-only { display: block !important; }
+  .alarab-calc .grid { display: block; }
+  .alarab-calc .tiers { position: static; display: block; }
+  .alarab-calc #tiers { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .alarab-calc .tier { break-inside: avoid; padding: 10px 12px; border-radius: 8px; }
+  .alarab-calc .tier .sell { font-size: 26px; }
+  .alarab-calc .tier .sub { font-size: 11px; gap: 10px; }
+  .alarab-calc .tier .hotel { font-size: 12px; }
+  .alarab-calc .inc { display: block; padding: 0 14px 0 0; font-size: 11.5px; line-height: 1.55; }
+  .alarab-calc #printHead { margin-bottom: 12px; }
+  .alarab-calc .ph-brand { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid var(--sea); padding-bottom: 6px; margin-bottom: 10px; }
+  .alarab-calc .ph-brand b { font-family: var(--display); font-size: 20px; color: var(--sea-deep); }
+  .alarab-calc .ph-brand span { font-size: 11.5px; color: var(--ink2); }
+  .alarab-calc #printHead h2 { font-family: var(--display); font-size: 18px; margin: 0 0 4px; color: var(--sea-deep); }
+  .alarab-calc #printHead p { margin: 0; color: var(--ink2); font-size: 12px; }
+  .alarab-calc .pf { margin-top: 12px; font-size: 10.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 6px; }
+}

@@ -7,6 +7,7 @@ import { toCents } from '../pricing.ts';
 import * as db from '../db.ts';
 import { getSession, expectStep, clearStep, type Session } from '../state.ts';
 import { fmt, keyboard } from '../ui.ts';
+import { marginPerDay, setMarginPerDay, wpConfigured } from '../policy.ts';
 
 const uid = (ctx: Context) => ctx.from?.id ?? 0;
 
@@ -32,10 +33,9 @@ const SERVICE_LABEL: Record<string, string> = {
 
 export async function startRates(ctx: Context): Promise<void> {
   const destinations = await db.listDestinations();
-  await ctx.reply('<b>الأسعار</b>\n\nاختر الوجهة:', {
-    parse_mode: 'HTML',
-    reply_markup: keyboard(destinations, (d) => d.name, (d) => `r:d:${d.slug}`, 1),
-  });
+  const kb = keyboard(destinations, (d) => d.name, (d) => `r:d:${d.slug}`, 1);
+  kb.row().text(`💰 سياسة الربح — ${fmt(await marginPerDay())} لليوم`, 'r:pol');
+  await ctx.reply('<b>الأسعار</b>\n\nاختر الوجهة:', { parse_mode: 'HTML', reply_markup: kb });
 }
 
 async function showCategories(ctx: Context, slug: string, edit: boolean): Promise<void> {
@@ -152,6 +152,21 @@ export async function handleRatesStep(ctx: Context, s: Session, text: string): P
         await ctx.reply(`✅ تم — ${SERVICE_LABEL[field!]} = ${fmt(cents)}`);
       }
       await clearStep(s);
+      return true;
+    }
+
+    case 'r.policy': {
+      const cents = toCents(text);
+      if (cents < 0 || !Number.isFinite(cents)) {
+        await ctx.reply('اكتب رقماً بالدولار لليوم الواحد، مثل: <code>40</code>', { parse_mode: 'HTML' });
+        return true;
+      }
+      const { wp } = await setMarginPerDay(cents);
+      await clearStep(s);
+      await ctx.reply(
+        `✅ سياسة الربح: ${fmt(cents)} لليوم الواحد` +
+          (wp === true ? '\nوصلت إلى الموقع أيضاً.' : wp === false ? '\n⚠️ لم تصل إلى الموقع — تحقق من WP_APP_PASSWORD.' : ''),
+      );
       return true;
     }
 
@@ -305,6 +320,17 @@ export async function handleRatesCallback(ctx: Context, parts: string[]): Promis
       await ctx.answerCallbackQuery();
       await expectStep(s, 'r.service', `${a}|${b}`);
       await ctx.reply(`السعر الجديد لـ «${SERVICE_LABEL[b ?? '']}» بالدولار:`);
+      return true;
+
+    case 'pol':
+      await ctx.answerCallbackQuery();
+      await expectStep(s, 'r.policy');
+      await ctx.reply(
+        'ربح الشركة لكل يوم من أيام البرنامج، بالدولار (يُضرب في الليالي + 1).' +
+          '\nسياسة داخلية لا تظهر للزبون. <code>0</code> يعيد نسب الفئات.' +
+          (wpConfigured() ? '' : '\n\nملاحظة: الموقع غير مربوط بعد (WP_URL) — تُحفظ في القاعدة فقط.'),
+        { parse_mode: 'HTML' },
+      );
       return true;
 
     case 'ex':

@@ -246,3 +246,24 @@ test('الهامش الثابت يحلّ محل النسبة ويُطبَّق م
     assert.equal(o.markup, 30_000, `${o.tier}: الهامش الثابت لم يصل`);
   }
 });
+
+test('سياسة الربح لليوم: ثابت × (الليالي + 1)، وتحلّ محل النسبة', () => {
+  // 6 ليالٍ = 7 أيام × 40$ = 280$
+  const r = quote({ ...trabzon, marginPerDay: 4_000 });
+  assert.equal(r.markup, 28_000);
+  assert.equal(r.cost, 208_600, 'التكلفة لا تتأثر');
+
+  // الهامش الثابت للحجز يتقدّم على سياسة اليوم
+  assert.equal(quote({ ...trabzon, marginPerDay: 4_000, marginFixed: 30_000 }).markup, 30_000);
+
+  // صفر = لا سياسة → تعود نسبة الفئة
+  assert.equal(quote({ ...trabzon, marginPerDay: 0 }).markup, 45_892);
+
+  // الفئات الثلاث تحمل نفس الرقم — السياسة واحدة للشركة
+  const rates: Record<Tier, TierRates> = {
+    economy: { hotelRate: 5_000, tripleExtra: 1_800, carRate: 7_000, guideIncluded: false },
+    premium: { hotelRate: 8_500, tripleExtra: 3_000, carRate: 9_500, guideIncluded: false },
+    vip: { hotelRate: 14_500, tripleExtra: 5_100, carRate: 15_000, guideIncluded: true },
+  };
+  for (const o of threeTiers({ ...trabzon, marginPerDay: 4_000 }, rates)) assert.equal(o.markup, 28_000, o.tier);
+});

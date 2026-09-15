@@ -20,6 +20,7 @@ import {
   type TierRates,
 } from '../pricing.ts';
 import * as db from '../db.ts';
+import { marginPerDay } from '../policy.ts';
 import {
   getSession, save, expectStep, clearStep, resetDraft, dropSession, hasDraft,
   type Session,
@@ -265,7 +266,7 @@ export async function handleQuoteStep(ctx: Context, s: Session, text: string): P
       s.draft.marginFixed = isFixed && n > 0 ? n * 100 : undefined;
       await clearStep(s);
       await ctx.reply(
-        n === 0 ? '✅ عاد لهوامش الفئات' : isFixed ? `✅ هامش ثابت ${fmt(n * 100)}` : `✅ هامش موحّد ${n}٪`,
+        n === 0 ? '✅ عاد إلى سياسة الشركة' : isFixed ? `✅ هامش ثابت ${fmt(n * 100)}` : `✅ هامش موحّد ${n}٪`,
       );
       await showResult(ctx, s);
       return true;
@@ -360,6 +361,8 @@ async function buildOffers(s: Session): Promise<Built | null> {
     miscTotal: d.miscTotal ?? 0,
     marginPct: d.marginPct ?? 22,
     marginFixed: d.marginFixed,
+    // سياسة الشركة (ربح لليوم) هي الافتراضي؛ النسبة اليدوية تعطّلها
+    marginPerDay: d.marginPct ? 0 : await marginPerDay(),
     feesBp: FEES_BP,
     depositPct: DEPOSIT_PCT,
     roundTo: ROUND_TO,
@@ -543,6 +546,7 @@ async function editMenu(ctx: Context, s: Session, edit = false): Promise<void> {
     .text('💰 الهامش', 'q:ed:margin').row()
     .text('◀️ عُد للأسعار', 'q:calc');
 
+  const policy = await marginPerDay();
   const rows = [
     '<b>تعديل العرض</b>',
     '',
@@ -553,7 +557,8 @@ async function editMenu(ctx: Context, s: Session, edit = false): Promise<void> {
     `🚕 نقلات المطار: ${d.transfers ?? 2}`,
     `➕ خدمات: ${fmt(d.simPerPerson ?? 0)} شريحة · ${fmt(d.dinnerPerPerson ?? 0)} عشاء · ${fmt(d.miscTotal ?? 0)} متفرقات`,
     `💰 الهامش: ${
-      d.marginFixed ? `${fmt(d.marginFixed)} ثابت` : d.marginPct ? `${d.marginPct}٪ موحّد` : 'حسب الفئة (18 · 22 · 28)'
+      d.marginFixed ? `${fmt(d.marginFixed)} ثابت` : d.marginPct ? `${d.marginPct}٪ موحّد`
+        : policy > 0 ? `سياسة الشركة ${fmt(policy)} لليوم` : 'حسب الفئة (18 · 22 · 28)'
     }`,
   ];
   const text = rows.join('\n');
@@ -639,9 +644,9 @@ export async function handleQuoteCallback(ctx: Context, parts: string[]): Promis
         case 'margin':
           await expectStep(s, 'q.margin');
           await ctx.reply(
-            'هامش موحّد لكل الفئات:\n' +
+            'هامش لهذا العرض وحده:\n' +
               'نسبة مثل <code>22</code> · أو رقم ثابت على الحجز كله مثل <code>$300</code>\n' +
-              'اكتب <code>0</code> للعودة لهوامش الفئات (18 · 22 · 28).',
+              'اكتب <code>0</code> للعودة إلى سياسة الشركة (ربح لليوم — تُعدَّل من الأسعار ← سياسة الربح).',
             { parse_mode: 'HTML' },
           );
           return true;

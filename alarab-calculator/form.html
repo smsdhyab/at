@@ -1,17 +1,3 @@
-<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex, nofollow">
-<title>حاسبة الأسعار — المسافرون العرب</title>
-<link rel="icon" href="data:,">
-<link rel="stylesheet" href="calc.css">
-<style>body { margin: 0; background: #F0F8F6; } @media (max-width: 860px) { body { background: #D3E9F0; } }</style>
-</head>
-<body>
-<!-- مولَّد من calc/form.html بواسطة npm run calc:build — لا تعدّله هنا -->
-<div class="alarab-calc" data-mode="staff">
 <!-- جزء الحاسبة — يُحقن داخل <div class="alarab-calc"> في docs/index.html وفي إضافة ووردبرس.
      مصدر واحد: أي تعديل هنا يصل إلى المكانين مع npm run calc:build. -->
 <div class="head">
@@ -138,10 +124,3 @@
 <p class="pf print-only" id="printFoot"></p>
 <p class="foot staff-only">كل المبالغ بالدولار. الحساب بأعداد صحيحة بالسنت — نفس ملف pricing.ts في البوت.</p>
 <p class="foot public-only">الأسعار بالدولار الأمريكي وتخضع لتوفر الفنادق عند التأكيد.</p>
-
-</div>
-<script>/* للمعاينة فقط: ?mode=public يعرض ما يراه الزائر */
-if (new URLSearchParams(location.search).get('mode') === 'public') document.querySelector('.alarab-calc').dataset.mode = 'public';</script>
-<script type="module" src="calc.js"></script>
-</body>
-</html>
