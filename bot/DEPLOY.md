@@ -1,74 +1,79 @@
-# النشر — تشغيل 24 ساعة
+# النشر — تشغيل 24 ساعة من السحابة
 
-الحاوية تحمل كل شيء: البوت، وقاعدة البيانات، ومتصفح Chromium لتوليد PDF والصور.
-لا خدمة ثانية ولا رابط اتصال.
+الحاوية تحمل البوت ومتصفح Chromium لتوليد PDF والصور. **قاعدة البيانات في
+Supabase** — الحاوية بلا حالة تماماً: تُعاد بناؤها بلا خسارة، ولا قرص ثابت مطلوب.
 
-## ⚠️ القاعدة الوحيدة التي لا تُخالف
+## القاعدة الوحيدة التي لا تُخالف
 
-**اربط قرصاً ثابتاً على المسار `/data`.**
-
-قاعدة البيانات ملف واحد داخل الحاوية. بلا قرص ثابت، كل عروضك وأسعارك وفنادقك
-**تُمحى عند أول إعادة نشر** — الحاوية تُبنى من الصفر والملف معها.
+**نسخة واحدة تعمل بالتوكن في أي لحظة.** البوت يستطلع تليغرام، وتليغرام يعطي
+الاستطلاع لنسخة واحدة ويرفض الثانية بخطأ 409. **أوقف البوت على جهازك قبل
+النشر**، ولا تشغّله محلياً بعدها إلا بعد إيقاف السحابي.
 
 ## Railway — عشر دقائق
 
-1. **railway.app** ← New Project ← Deploy from GitHub repo ← اختر `newaa1/at`
-2. **Settings ← Root Directory:** اكتب `bot`
-   (المستودع فيه مجلدان، وهذا يخبره أين المشروع)
-3. **Settings ← Volumes ← New Volume:** المسار `/data`
-4. **Variables** ← أضف:
-
-   | المتغيّر | القيمة |
-   |---|---|
-   | `TELEGRAM_TOKEN` | توكن البوت من @BotFather |
-   | `DB_FILE` | `/data/aat.db` |
-   | `WHATSAPP_NUMBER` | `966534436932` |
-   | `BRAND_LEGAL_NAME` | الاسم القانوني الكامل |
-   | `BRAND_LICENSE` | رقم رخصة الوكالة |
-   | `BRAND_ADDRESS` | العنوان |
-   | `BRAND_EMAIL` | البريد الرسمي |
-
-   **لا تضع `ALLOWED_IDS`** إن أردت الوصول مفتوحاً، أو ضع معرّفاتكم لإغلاقه من البداية.
-
-5. Deploy. راقب السجل حتى يظهر:
+1. **railway.com** ← سجّل بحساب GitHub (`smsdhyab`) ← **New Project** ← **Deploy from GitHub repo** ← اختر `smsdhyab/at`.
+2. **Settings ← Source ← Root Directory:** اكتب `bot`
+   (المستودع فيه أكثر من مجلد، وهذا يخبره أين المشروع. ملف `railway.json` يتكفّل بالباقي.)
+3. **Variables ← Raw Editor** ← الصق:
 
    ```
-   جهّزت قاعدة البيانات — 4 ملف جديد.
+   TELEGRAM_TOKEN=
+   DATABASE_URL=
+   WHATSAPP_NUMBER=966534436932
+   BRAND_LEGAL_NAME=
+   BRAND_LICENSE=
+   BRAND_ADDRESS=
+   BRAND_EMAIL=
+   WP_URL=https://alarabtravelers.com
+   WP_USER=
+   WP_APP_PASSWORD=
+   ```
+
+   القيم من ملف `bot/.env` على جهازك — انسخها بنفسك، لا ترسلها في أي محادثة.
+   `DATABASE_URL` هو رابط **pooler** لا `db.<ref>`، بكلمة المرور مشفَّرة (`#` ← `%23`).
+   `WP_*` اختيارية: بدونها تُحفظ سياسة الربح في القاعدة فقط.
+   **لا تضع `ALLOWED_IDS`** إن أردت الوصول مفتوحاً.
+
+4. **Deploy**. راقب السجل (Deployments ← View Logs) حتى يظهر:
+
+   ```
    البوت يعمل: @arabtravelbot
+   المستخدمون: N · الوصول: مفتوح للجميع
    ```
 
-**أوقف البوت على جهازك قبل النشر.** نسختان بنفس التوكن تتنازعان وتفشلان
-بخطأ 409 من تليغرام.
+   الجداول تُطبَّق تلقائياً عند الإقلاع — القاعدة موجودة أصلاً فلن يظهر شيء جديد.
+
+5. جرّب من تليغرام: `/start` ← عرض سعر جديد ← حتى PDF. إن خرج المستند بخط ثمانية فالخطوط وصلت.
+
+**بعدها**: كل `git push` إلى `main` يعيد النشر تلقائياً خلال دقيقتين.
+
+## التحكم من السحابة
+
+| ماذا | أين |
+|---|---|
+| الأسعار والفنادق والجولات والخدمات | البوت ← الأسعار (أو لوحة ووردبرس ← حاسبة الأسعار للعرض) |
+| سياسة الربح لليوم | البوت ← الأسعار ← سياسة الربح · أو ووردبرس ← الإعدادات |
+| إيقاف / تشغيل / سجل | Railway ← الخدمة ← Deployments |
+| تغيير التوكن أو الهوية | Railway ← Variables (يعيد التشغيل تلقائياً) |
+| فتح الوصول أو إغلاقه | متغيّر `ALLOWED_IDS` |
 
 ## سيرفر خاص (Hetzner وغيره)
 
 ```bash
-git clone https://github.com/newaa1/at.git && cd at/bot
-cp .env.example .env      # املأ التوكن والهوية
+git clone https://github.com/smsdhyab/at.git && cd at/bot
+cp .env.example .env      # املأ التوكن ورابط القاعدة والهوية
 docker build -t aat-bot .
-docker run -d --name aat-bot --env-file .env \
-  -v aat-data:/data --restart unless-stopped aat-bot
+docker run -d --name aat-bot --env-file .env --restart unless-stopped aat-bot
 ```
+
+التحديث: `git pull && docker build -t aat-bot . && docker restart aat-bot`.
 
 ## النسخ الاحتياطي
 
-ملف واحد. انسخه وانتهى الأمر:
+القاعدة في Supabase — لوحة المشروع ← Database ← Backups (يومي على الباقة المجانية).
+الحاوية نفسها لا تحمل شيئاً يستحق النسخ.
 
-```bash
-docker run --rm -v aat-data:/data -v "$PWD:/out" alpine cp /data/aat.db /out/backup.db
-```
+## متصفح بعيد بدل Chromium داخل الحاوية
 
-على Railway: Volume ← Backups.
-
-## الانتقال إلى Supabase لاحقاً
-
-ثلاثة تغييرات مطلوبة، أحدها جاهز:
-
-| التغيير | الحالة |
-|---|---|
-| متصفح بعيد للـ PDF | ✅ **جاهز** — اضبط `BROWSER_WS_ENDPOINT` بعنوان Browserless |
-| webhook بدل الاستطلاع الطويل | يحتاج عملاً |
-| Postgres بدل ملف SQLite | يحتاج عملاً |
-
-سبب المتصفح البعيد: توثيق Supabase نفسه يذكر أن Puppeteer لا يعمل داخل
-Edge Functions بسبب حدود الحجم، ويوصي بمتصفح خارجي عبر WebSocket.
+إن أردت حاوية أخف أو استضافة بلا متصفح (Supabase Edge Functions)، اضبط
+`BROWSER_WS_ENDPOINT` بعنوان Browserless — عندها يُتجاهل Chromium المحلي.
