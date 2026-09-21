@@ -260,6 +260,16 @@ export const addUser = (id: number, name: string | null, username: string | null
 export const setUserRole = (id: number, role: 'admin' | 'blocked') =>
   sql`update users set role = ${role} where telegram_id = ${id}`;
 
+/**
+ * دعوة مستخدم بمعرّفه قبل أن يراسل البوت. إن كان محظوراً يعود مشرفاً —
+ * addUser لا تمسّ الدور عند التعارض، وهذه تفعل عن قصد.
+ */
+export const inviteUser = (id: number) => sql`
+  insert into users (telegram_id, role) values (${id}, 'admin')
+  on conflict (telegram_id) do update set role = 'admin'`;
+
+export const deleteUser = (id: number) => sql`delete from users where telegram_id = ${id}`;
+
 /* ----------------------------- الإعدادات ----------------------------- */
 
 export const getSetting = async (key: string, fallback = ''): Promise<string> => {

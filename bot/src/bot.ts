@@ -14,7 +14,7 @@ import * as db from './db.ts';
 import { runMigrations } from './migrate.ts';
 import { startQuote, handleQuoteCallback, handleQuoteStep } from './flows/quote.ts';
 import { startRates, handleRatesCallback, handleRatesStep } from './flows/rates.ts';
-import { getSession, dropSession } from './state.ts';
+import { getSession, dropSession, expectStep, clearStep, type Session } from './state.ts';
 import { fmt } from './ui.ts';
 
 const token = process.env.TELEGRAM_TOKEN;
@@ -155,13 +155,68 @@ async function showSettings(ctx: Context, edit = false) {
     '',
     open
       ? '🔓 <b>الوصول مفتوح.</b> أي شخص يراسل البوت يصبح مشرفاً ويرى تكاليفك وأرباحك ويعدّل أسعارك.'
-      : '🔒 <b>الوصول مغلق.</b> لا يدخل أحد جديد.',
+      : '🔒 <b>الوصول مغلق.</b> لا يدخل أحد إلا من تضيفه بالمعرّف من «المستخدمون».',
     '',
     `عدد المستخدمين الحاليين: <b>${users.length}</b>`,
   ].join('\n');
 
   if (edit) await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
   else await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
+}
+
+/**
+ * إدارة المستخدمين: دعوة بالمعرّف قبل أن يراسل الشخص البوت، وحظر، وحذف.
+ * الحظر يبقي الصف ويمنع الوصول؛ الحذف يزيله فيعود كأنه لم يدخل قط (ومع
+ * الوصول المفتوح يستطيع الدخول ثانية — لذا الحظر هو الإبعاد الحقيقي).
+ */
+async function showUsers(ctx: Context, edit = false) {
+  const me = ctx.from!.id;
+  const users = await db.listUsers();
+  const kb = new InlineKeyboard();
+  for (const u of users) {
+    const label = `${u.role === 'blocked' ? '🚫 ' : ''}${u.name ?? u.username ?? u.telegram_id}`;
+    kb.text(label, `s:u:${u.telegram_id}`);
+    if (u.telegram_id === me) kb.text('أنت', 's:noop');
+    else if (u.role === 'blocked') kb.text('✅ فكّ الحظر', `s:unblock:${u.telegram_id}`).text('🗑', `s:del:${u.telegram_id}`);
+    else kb.text('🚫 حظر', `s:block:${u.telegram_id}`).text('🗑', `s:del:${u.telegram_id}`);
+    kb.row();
+  }
+  kb.text('➕ أضف مستخدماً', 's:add').text('◀️ الإعدادات', 's:back');
+  const admins = users.filter((u) => u.role === 'admin').length;
+  const text = [
+    '<b>المستخدمون</b>',
+    '',
+    `${admins} مشرف · ${users.length - admins} محظور`,
+    'اضغط على اسم لعرض معرّفه. المضاف بالمعرّف يدخل مباشرة حتى لو كان الوصول مغلقاً.',
+  ].join('\n');
+  if (edit) await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
+  else await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
+}
+
+/** خطوة إدخال معرّف المستخدم الجديد: رقم، أو رسالة محوَّلة منه. */
+async function handleSettingsStep(ctx: Context, s: Session, text: string): Promise<boolean> {
+  if (s.step !== 's.addUser') return false;
+  const origin = ctx.message?.forward_origin;
+  const forwarded = origin?.type === 'user' ? origin.sender_user.id : undefined;
+  const typed = /^\d{5,15}$/.test(text) ? Number(text) : undefined;
+  const id = forwarded ?? typed;
+  if (!id) {
+    await ctx.reply(
+      origin?.type === 'hidden_user'
+        ? 'هذا الشخص يخفي حسابه في الرسائل المحوَّلة. اطلب منه معرّفه الرقمي من @userinfobot وأرسله هنا.'
+        : 'أرسل المعرّف الرقمي (من @userinfobot) أو حوّل رسالة من الشخص نفسه.',
+    );
+    return true;
+  }
+  await db.inviteUser(id);
+  if (forwarded && origin?.type === 'user') {
+    const u = origin.sender_user;
+    await db.addUser(id, [u.first_name, u.last_name].filter(Boolean).join(' ') || null, u.username ?? null);
+  }
+  await clearStep(s);
+  await ctx.reply(`✅ أُضيف <code>${id}</code> مشرفاً. يدخل بمجرد أن يرسل /start للبوت.`, { parse_mode: 'HTML' });
+  await showUsers(ctx);
+  return true;
 }
 
 /* ------------------------------ الأوامر ------------------------------ */
@@ -191,12 +246,50 @@ bot.on('callback_query:data', async (ctx) => {
       await showSettings(ctx, true);
       return;
     }
-    if (parts[1] === 'users') {
-      const list = (await db.listUsers())
-        .map((u) => `• ${u.name ?? 'بلا اسم'}${u.username ? ` (@${u.username})` : ''} — <code>${u.telegram_id}</code>`)
-        .join('\n');
+    if (parts[1] === 'users') { await ctx.answerCallbackQuery(); await showUsers(ctx, true); return; }
+    if (parts[1] === 'back') { await ctx.answerCallbackQuery(); await showSettings(ctx, true); return; }
+    if (parts[1] === 'noop') { await ctx.answerCallbackQuery('هذا حسابك'); return; }
+    if (parts[1] === 'add') {
       await ctx.answerCallbackQuery();
-      await ctx.reply(`<b>المستخدمون</b>\n\n${list}`, { parse_mode: 'HTML' });
+      await expectStep(await getSession(ctx.from.id), 's.addUser');
+      await ctx.reply(
+        'أرسل <b>المعرّف الرقمي</b> للشخص (يحصل عليه من @userinfobot)،\n' +
+          'أو <b>حوّل إليّ أي رسالة</b> منه.',
+        { parse_mode: 'HTML' },
+      );
+      return;
+    }
+    const target = Number(parts[2]);
+    if (parts[1] === 'u' && target) {
+      const u = await db.getUser(target);
+      await ctx.answerCallbackQuery({
+        text: u ? `${u.name ?? 'بلا اسم'}${u.username ? ` @${u.username}` : ''}\nالمعرّف: ${u.telegram_id}\n${u.role === 'blocked' ? 'محظور' : 'مشرف'}` : 'غير موجود',
+        show_alert: true,
+      });
+      return;
+    }
+    if ((parts[1] === 'block' || parts[1] === 'del') && target === ctx.from.id) {
+      await ctx.answerCallbackQuery({ text: 'لا تستطيع حظر نفسك أو حذفها.', show_alert: true });
+      return;
+    }
+    if (parts[1] === 'block' && target) {
+      await db.setUserRole(target, 'blocked');
+      await dropSession(target);
+      await ctx.answerCallbackQuery('حُظر');
+      await showUsers(ctx, true);
+      return;
+    }
+    if (parts[1] === 'unblock' && target) {
+      await db.setUserRole(target, 'admin');
+      await ctx.answerCallbackQuery('عاد مشرفاً');
+      await showUsers(ctx, true);
+      return;
+    }
+    if (parts[1] === 'del' && target) {
+      await db.deleteUser(target);
+      await dropSession(target);
+      await ctx.answerCallbackQuery('حُذف');
+      await showUsers(ctx, true);
       return;
     }
   }
@@ -229,7 +322,9 @@ bot.on('message:text', async (ctx) => {
       ? await handleQuoteStep(ctx, session, text)
       : session.step.startsWith('r.')
         ? await handleRatesStep(ctx, session, text)
-        : false;
+        : session.step.startsWith('s.')
+          ? await handleSettingsStep(ctx, session, text)
+          : false;
     if (handled) return;
   }
 

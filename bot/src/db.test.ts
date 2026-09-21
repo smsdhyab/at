@@ -132,3 +132,25 @@ test('اسم عمود غير مسموح يُرفض ولا يصل إلى الاس
     /عمود غير مسموح/,
   );
 });
+
+test('دعوة مستخدم بالمعرّف، وحظره، وإعادته، وحذفه', { skip }, async () => {
+  // معرّف اختبار كبير كي لا يصادف حساباً حقيقياً
+  const id = 9_000_000_000_001;
+  try {
+    await db!.inviteUser(id);
+    assert.equal((await db!.getUser(id))?.role, 'admin', 'المدعو يدخل مشرفاً');
+
+    await db!.setUserRole(id, 'blocked');
+    assert.equal((await db!.getUser(id))?.role, 'blocked');
+
+    // الدعوة من جديد تفكّ الحظر — addUser وحدها لا تمسّ الدور
+    await db!.addUser(id, 'اسم', 'user');
+    assert.equal((await db!.getUser(id))?.role, 'blocked', 'addUser لا تغيّر الدور');
+    await db!.inviteUser(id);
+    assert.equal((await db!.getUser(id))?.role, 'admin', 'inviteUser تعيده مشرفاً');
+    assert.equal((await db!.getUser(id))?.name, 'اسم', 'الاسم المحفوظ لا يُمسح');
+  } finally {
+    await db!.deleteUser(id);
+  }
+  assert.equal(await db!.getUser(id), undefined, 'الحذف يزيل الصف');
+});
