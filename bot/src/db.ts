@@ -281,7 +281,6 @@ export const setSetting = (key: string, value: string) => sql`
   insert into settings (key, value) values (${key}, ${value})
   on conflict (key) do update set value = excluded.value`;
 
-export const isOpenAccess = async () => (await getSetting('open_access', '1')) === '1';
 
 /* ------------------------------- العروض ------------------------------- */
 

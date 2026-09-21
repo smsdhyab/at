@@ -5,9 +5,10 @@
  * الحاجة لعنوان عام و TLS واستثناء في Cloudflare و ngrok للتجربة المحلية —
  * والبوت داخلي بنسخة واحدة فلا فائدة من الـ webhook.
  *
- * الوصول: في «وضع الفتح» يُسجَّل تلقائياً كل من يراسل البوت كمشرف. هذا اختيار
- * صريح من المالك ويُغلق بزر واحد من ⚙️ الإعدادات. ما دام مفتوحاً فمن يعرف اسم
- * البوت يرى التكاليف والأرباح ويعدّل الأسعار.
+ * الوصول مغلق دائماً: لا يدخل إلا من أُضيف بمعرّفه — من الإعدادات ← المستخدمون،
+ * أو من ALLOWED_IDS عند الإقلاع (للدخول الأول على قاعدة جديدة). لا يوجد وضع
+ * «مفتوح للجميع»: من يعرف اسم البوت لا يرى شيئاً حتى يُضاف. قرار المالك
+ * بعد أن كان مفتوحاً في البداية ودخل غريب.
  */
 import { Bot, InlineKeyboard, Keyboard, type Context } from 'grammy';
 import * as db from './db.ts';
@@ -79,27 +80,13 @@ bot.use(async (ctx, next) => {
   if (existing?.role === 'blocked') return;
 
   if (!existing) {
-    if (!(await db.isOpenAccess())) {
-      console.warn(`محاولة وصول مرفوضة من ${from.id} (${from.username ?? 'بلا معرّف'})`);
-      return;
-    }
+    console.warn(`محاولة وصول مرفوضة من ${from.id} (${from.username ?? 'بلا معرّف'})`);
+    return;
+  }
+  // تحديث الاسم والمعرّف عند كل رسالة — المضاف بالمعرّف وحده يدخل بلا اسم
+  if (!existing.name || existing.username !== (from.username ?? null)) {
     const name = [from.first_name, from.last_name].filter(Boolean).join(' ') || null;
     await db.addUser(from.id, name, from.username ?? null);
-    console.log(`مستخدم جديد: ${from.id} — ${name ?? 'بلا اسم'} (@${from.username ?? '—'})`);
-
-    // إشعار بقية المشرفين — الوصول مفتوح، فيجب أن يعرفوا من دخل
-    for (const u of await db.listUsers()) {
-      if (u.telegram_id === from.id || u.role !== 'admin') continue;
-      await bot.api
-        .sendMessage(
-          u.telegram_id,
-          `👤 انضم مستخدم جديد للبوت:\n<b>${name ?? 'بلا اسم'}</b>` +
-            `${from.username ? ` (@${from.username})` : ''}\nالمعرّف: <code>${from.id}</code>` +
-            `\n\nالوصول مفتوح للجميع. أغلقه من ⚙️ الإعدادات إن لم تكن تعرفه.`,
-          { parse_mode: 'HTML' },
-        )
-        .catch(() => {});
-    }
   }
 
   await next();
@@ -144,20 +131,16 @@ async function showStats(ctx: Context) {
 }
 
 async function showSettings(ctx: Context, edit = false) {
-  const open = await db.isOpenAccess();
   const users = await db.listUsers();
-  const kb = new InlineKeyboard()
-    .text(open ? '🔓 الوصول مفتوح — اضغط للإغلاق' : '🔒 الوصول مغلق — اضغط للفتح', 's:toggle').row()
-    .text(`👥 المستخدمون (${users.length})`, 's:users');
+  const admins = users.filter((u) => u.role === 'admin').length;
+  const kb = new InlineKeyboard().text(`👥 المستخدمون (${admins})`, 's:users');
 
   const text = [
     '<b>الإعدادات</b>',
     '',
-    open
-      ? '🔓 <b>الوصول مفتوح.</b> أي شخص يراسل البوت يصبح مشرفاً ويرى تكاليفك وأرباحك ويعدّل أسعارك.'
-      : '🔒 <b>الوصول مغلق.</b> لا يدخل أحد إلا من تضيفه بالمعرّف من «المستخدمون».',
+    '🔒 <b>الوصول مغلق.</b> لا يدخل أحد إلا من تضيفه بالمعرّف من «المستخدمون».',
     '',
-    `عدد المستخدمين الحاليين: <b>${users.length}</b>`,
+    `المشرفون الحاليون: <b>${admins}</b>`,
   ].join('\n');
 
   if (edit) await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
@@ -166,8 +149,8 @@ async function showSettings(ctx: Context, edit = false) {
 
 /**
  * إدارة المستخدمين: دعوة بالمعرّف قبل أن يراسل الشخص البوت، وحظر، وحذف.
- * الحظر يبقي الصف ويمنع الوصول؛ الحذف يزيله فيعود كأنه لم يدخل قط (ومع
- * الوصول المفتوح يستطيع الدخول ثانية — لذا الحظر هو الإبعاد الحقيقي).
+ * الحظر والحذف كلاهما يمنع الدخول (لا وضع مفتوح). الفرق: المحظور يبقى في
+ * القائمة بعلامة كي تتذكّر من أبعدت، والمحذوف يختفي.
  */
 async function showUsers(ctx: Context, edit = false) {
   const me = ctx.from!.id;
@@ -239,13 +222,6 @@ bot.on('callback_query:data', async (ctx) => {
   const parts = data.split(':');
 
   if (parts[0] === 's') {
-    if (parts[1] === 'toggle') {
-      const now = !(await db.isOpenAccess());
-      await db.setSetting('open_access', now ? '1' : '0');
-      await ctx.answerCallbackQuery(now ? 'فُتح الوصول' : 'أُغلق الوصول');
-      await showSettings(ctx, true);
-      return;
-    }
     if (parts[1] === 'users') { await ctx.answerCallbackQuery(); await showUsers(ctx, true); return; }
     if (parts[1] === 'back') { await ctx.answerCallbackQuery(); await showSettings(ctx, true); return; }
     if (parts[1] === 'noop') { await ctx.answerCallbackQuery('هذا حسابك'); return; }
@@ -356,7 +332,7 @@ const me = await bot.api.getMe();
 console.log(
   `البوت يعمل: @${me.username}\n` +
     `المستخدمون: ${(await db.listUsers()).length} · ` +
-    `الوصول: ${(await db.isOpenAccess()) ? 'مفتوح للجميع' : 'مغلق'}`,
+    'الوصول: مغلق — الدخول بالإضافة فقط',
 );
 
 const stop = async () => {
